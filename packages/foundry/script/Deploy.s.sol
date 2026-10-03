@@ -6,6 +6,7 @@ import { BasketVault } from "../contracts/BasketVault.sol";
 
 /// @notice Deploys a BasketVault for a 40% HBAR / 30% SAUCE / 30% USDC basket.
 /// @dev Addresses are SaucerSwap V2 and Chainlink on Hedera testnet; swap them for mainnet.
+/// DRIFT_BPS (env, default 500) sets how far a leg may drift from its weight before a rebalance trades.
 contract DeployScript is ScaffoldETHDeploy {
     function run() external ScaffoldEthDeployerRunner {
         BasketVault.LegConfig[] memory legs = new BasketVault.LegConfig[](2);
@@ -27,7 +28,7 @@ contract DeployScript is ScaffoldETHDeploy {
                 whbar: 0x0000000000000000000000000000000000003aD2, // WHBAR 0.0.15058
                 hbarUsdFeed: 0x59bC155EB6c6C415fE43255aF66EcF0523c92B4a, // Chainlink HBAR/USD
                 maxOracleAge: 1 days + 1 hours,
-                driftBps: 500,
+                driftBps: vm.envOr("DRIFT_BPS", uint256(500)),
                 slippageBps: 300,
                 scheduledGas: 4_000_000,
                 guardLeg: type(uint256).max,
