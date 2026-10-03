@@ -6,7 +6,7 @@ import { useNow } from "~~/hooks/basket/useNow";
 import { useTx, useWalletReady } from "~~/hooks/basket/useTx";
 import type { Snapshot } from "~~/hooks/basket/useVault";
 import { GAS_FLOOR, VAULT_ABI, VAULT_ADDRESS } from "~~/utils/basket/constants";
-import { fmtDuration, fmtPercentFromBps, fmtUnits } from "~~/utils/basket/format";
+import { fmtDateTime, fmtDuration, fmtPercentFromBps, fmtUnits } from "~~/utils/basket/format";
 import { evmToEntityId, hashscan } from "~~/utils/basket/hedera";
 import { fetchLastRunFee } from "~~/utils/basket/mirror";
 
@@ -15,7 +15,7 @@ const Row = ({ label, children, note }: { label: string; children: React.ReactNo
     <dt className="text-sm text-base-content/70">{label}</dt>
     <dd className="m-0 text-right">
       <div className="font-mono text-sm tabular-nums">{children}</div>
-      {note && <div className="mt-0.5 text-xs text-base-content/60">{note}</div>}
+      {note && <div className="mt-0.5 text-xs text-base-content/70">{note}</div>}
     </dd>
   </div>
 );
@@ -43,9 +43,10 @@ export function AutomationCard({ snap }: { snap: Snapshot }) {
     return costPerRun ? (fuel - perRun) / costPerRun + 1n : fuel / perRun;
   })();
   const on = lv.rebalanceInterval > 0;
+  const isOwner = !!ready.address && ready.address.toLowerCase() === cfg.owner.toLowerCase();
 
   const nextRun = (() => {
-    if (!on) return { text: "Off", note: "The basket rebalances only when someone presses Rebalance now." };
+    if (!on) return { text: "Off", note: "The basket rebalances only when the owner triggers it." };
     if (!lv.pendingSchedule) {
       return {
         text: "No run booked",
@@ -56,7 +57,7 @@ export function AutomationCard({ snap }: { snap: Snapshot }) {
     if (now === null) return { text: "n/a" };
     const left = lv.nextRunAt - now;
     return left > 0
-      ? { text: `in ${fmtDuration(left)}`, note: new Date(lv.nextRunAt * 1000).toLocaleString() }
+      ? { text: `in ${fmtDuration(left)}`, note: fmtDateTime(lv.nextRunAt) }
       : { text: `${fmtDuration(-left)} past due`, note: "Waiting for the network to execute the schedule." };
   })();
 
@@ -88,7 +89,7 @@ export function AutomationCard({ snap }: { snap: Snapshot }) {
         <Row label="Pending schedule">
           {lv.pendingSchedule ? (
             <a
-              className="link link-primary"
+              className="link link-primary -my-2 inline-block py-2"
               href={hashscan.schedule(lv.pendingSchedule)}
               target="_blank"
               rel="noreferrer"
@@ -110,7 +111,9 @@ export function AutomationCard({ snap }: { snap: Snapshot }) {
           {fuel !== undefined ? `${fmtUnits(fuel, 18, 4)} HBAR` : "n/a"}
         </Row>
         <Row label="Runs covered">
-          <span className={on && runs === 0n ? "text-error" : ""}>{runs !== undefined ? runs.toString() : "n/a"}</span>
+          <span className={on && runs === 0n ? "text-error" : ""}>
+            {runs !== undefined ? `${runs} ${runs === 1n ? "run" : "runs"}` : "n/a"}
+          </span>
         </Row>
         <Row label="Drift band">{`±${fmtPercentFromBps(cfg.driftBps)} of NAV`}</Row>
         <Row label="Swap slippage guard">{fmtPercentFromBps(cfg.slippageBps)}</Row>
@@ -123,30 +126,31 @@ export function AutomationCard({ snap }: { snap: Snapshot }) {
         </p>
       )}
 
-      <div className="mt-6 flex flex-col gap-4">
-        {Object.keys(tx.runs).length > 0 && (
-          <TxSteps steps={[{ id: "rebalance", label: "Rebalance", needed: true }]} runs={tx.runs} />
-        )}
-        {lv.hbarUsd === undefined && (
-          <p className="m-0 text-sm text-warning">Rebalancing waits for a fresh Chainlink answer.</p>
-        )}
-        <WalletGate ready={ready}>
-          <button
-            type="button"
-            className="btn btn-primary w-full"
-            disabled={tx.running || lv.hbarUsd === undefined}
-            onClick={rebalance}
-          >
-            {tx.running ? "Working" : "Rebalance now"}
-          </button>
-        </WalletGate>
-        <p className="m-0 text-xs text-base-content/60">
-          Anyone can call it. It trades only the tokens that sit outside the band, and only toward their targets.
-        </p>
-      </div>
-
-      {ready.address && ready.address.toLowerCase() === cfg.owner.toLowerCase() && (
-        <OwnerControls snap={snap} runs={runs} />
+      {isOwner && (
+        <>
+          <div className="mt-6 flex flex-col gap-4">
+            {Object.keys(tx.runs).length > 0 && (
+              <TxSteps steps={[{ id: "rebalance", label: "Rebalance", needed: true }]} runs={tx.runs} />
+            )}
+            {lv.hbarUsd === undefined && (
+              <p className="m-0 text-sm text-warning">Rebalancing waits for a fresh Chainlink answer.</p>
+            )}
+            <WalletGate ready={ready}>
+              <button
+                type="button"
+                className="btn btn-primary w-full"
+                disabled={tx.running || lv.hbarUsd === undefined}
+                onClick={rebalance}
+              >
+                {tx.running ? "Working" : "Rebalance now"}
+              </button>
+            </WalletGate>
+            <p className="m-0 text-xs text-base-content/70">
+              Trades only the tokens that sit outside the band, and only toward their targets.
+            </p>
+          </div>
+          <OwnerControls snap={snap} runs={runs} />
+        </>
       )}
     </section>
   );

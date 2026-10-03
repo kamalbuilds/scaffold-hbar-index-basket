@@ -22,7 +22,7 @@ export const NETWORKS_EXTRA_DATA: Record<string, ChainAttributes> = {
     color: "#8259EF",
   },
   [chains.hederaTestnet.id]: {
-    color: ["#8259EF", "#A98AFF"],
+    color: ["#6d45d9", "#A98AFF"],
   },
 };
 

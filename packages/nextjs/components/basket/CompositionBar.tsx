@@ -18,6 +18,10 @@ type Row = {
   outside: boolean;
 };
 
+/** Below lg each table row becomes a card, and every cell prints its own column name from data-label. */
+const CELL =
+  "[&>td]:p-0 [&>td[data-label]]:before:mb-1 [&>td[data-label]]:before:block [&>td[data-label]]:before:text-xs [&>td[data-label]]:before:font-medium [&>td[data-label]]:before:text-base-content/70 [&>td[data-label]]:before:content-[attr(data-label)] lg:[&>td]:px-3 lg:[&>td]:py-2 lg:[&>td[data-label]]:before:hidden";
+
 const segColor = (index: number) => `var(--seg-${index % 5})`;
 
 /** Rows in holdings() order: WHBAR first, then the legs. Drift is measured in basis points of NAV, as the contract does. */
@@ -47,9 +51,9 @@ function Bar({ label, values, rows, hollow }: { label: string; values: number[];
   const summary = rows.map((r, i) => `${r.symbol} ${values[i].toFixed(1)}%`).join(", ");
   return (
     <div className="grid grid-cols-[4.5rem_1fr] items-center gap-4">
-      <span className="text-xs font-medium text-base-content/60">{label}</span>
+      <span className="text-xs font-medium text-base-content/70">{label}</span>
       {hollow ? (
-        <div className="flex h-10 items-center rounded-md border border-dashed border-base-content/30 px-3 text-sm text-base-content/60">
+        <div className="flex h-10 items-center rounded-md border border-dashed border-base-content/30 px-3 text-sm text-base-content/70">
           {hollow}
         </div>
       ) : (
@@ -171,10 +175,10 @@ export function Composition({ snap }: { snap: Snapshot }) {
         />
       </div>
 
-      <div className="mt-8 overflow-x-auto">
-        <table className="table table-sm w-full min-w-[44rem]">
-          <thead>
-            <tr className="text-xs text-base-content/60">
+      <div className="mt-8">
+        <table className="table table-sm w-full max-lg:block">
+          <thead className="hidden lg:table-header-group">
+            <tr className="text-xs text-base-content/70">
               <th className="font-medium">Token</th>
               <th className="text-right font-medium">Balance</th>
               <th className="text-right font-medium">Value (WHBAR)</th>
@@ -183,12 +187,15 @@ export function Composition({ snap }: { snap: Snapshot }) {
               <th className="font-medium">Drift against ±{cfg.driftBps} bps</th>
             </tr>
           </thead>
-          <tbody className="tabular-nums">
+          <tbody className="block tabular-nums lg:table-row-group">
             {rows.map(r => (
-              <tr key={r.token}>
-                <td>
+              <tr
+                key={r.token}
+                className={`${CELL} grid grid-cols-2 gap-x-4 gap-y-3 border-b border-base-300 py-4 last:border-b-0 sm:grid-cols-4 lg:table-row lg:py-0`}
+              >
+                <td className="col-span-full lg:table-cell">
                   <a
-                    className="link-hover inline-flex items-center gap-2 font-medium"
+                    className="link-hover inline-flex min-h-8 items-center gap-2 font-medium"
                     href={hashscan.token(r.token)}
                     target="_blank"
                     rel="noreferrer"
@@ -197,28 +204,37 @@ export function Composition({ snap }: { snap: Snapshot }) {
                     {r.symbol}
                   </a>
                 </td>
-                <td className="text-right font-mono">{fmtUnits(r.balance, r.decimals, 4)}</td>
-                <td className="text-right font-mono">
+                <td data-label={`Balance (${r.symbol})`} className="font-mono lg:text-right">
+                  {fmtUnits(r.balance, r.decimals, 4)}
+                </td>
+                <td data-label="Value (WHBAR)" className="font-mono lg:text-right">
                   {fmtUnits(r.valueWhbar, WHBAR_DECIMALS, 4)}
                   {lv.hbarUsd !== undefined && (
-                    <div className="text-xs text-base-content/60">
+                    <div className="text-xs text-base-content/70">
                       {fmtUsd((r.valueWhbar * lv.hbarUsd) / 10n ** 8n)}
                     </div>
                   )}
                 </td>
-                <td className="text-right font-mono">{(r.targetBps / 100).toFixed(2)}%</td>
-                <td className="text-right font-mono">{empty ? "n/a" : `${r.actualPct.toFixed(2)}%`}</td>
-                <td>
+                <td data-label="Target" className="font-mono lg:text-right">
+                  {(r.targetBps / 100).toFixed(2)}%
+                </td>
+                <td data-label="Actual" className="font-mono lg:text-right">
+                  {empty ? "n/a" : `${r.actualPct.toFixed(2)}%`}
+                </td>
+                <td
+                  data-label={`Drift against ±${cfg.driftBps} bps`}
+                  className="col-span-full sm:col-span-2 lg:table-cell"
+                >
                   {empty ? (
-                    <span className="text-base-content/60">n/a</span>
+                    <span className="text-base-content/70">n/a</span>
                   ) : (
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                       <DriftGauge row={r} band={cfg.driftBps} />
                       <span className={`font-mono text-xs ${r.outside ? "font-medium text-error" : ""}`}>
                         {r.driftBps > 0 ? "+" : ""}
                         {r.driftBps} bps
                       </span>
-                      {r.index === 0 && <span className="text-xs text-base-content/60">residual</span>}
+                      {r.index === 0 && <span className="text-xs text-base-content/70">residual</span>}
                       {r.outside && <span className="text-xs font-medium text-error">outside band</span>}
                     </div>
                   )}

@@ -108,7 +108,7 @@ export function DepositPanel({ snap }: { snap: Snapshot }) {
       <label className="flex flex-col gap-2">
         <span className="flex items-baseline justify-between text-sm font-medium">
           Amount
-          <span className="text-xs font-normal text-base-content/60">
+          <span className="text-xs font-normal text-base-content/70">
             Wallet{" "}
             <span className="font-mono tabular-nums">
               {walletBalance !== undefined ? `${fmtUnits(walletBalance, 18, 4)} HBAR` : "n/a"}
@@ -143,7 +143,7 @@ export function DepositPanel({ snap }: { snap: Snapshot }) {
         </dd>
         <dt className="text-base-content/70">Minimum shares</dt>
         <dd className="m-0 text-right font-mono tabular-nums">
-          {minShares !== null ? fmtUnits(minShares, SHARE_DECIMALS, 4) : "n/a"}
+          {minShares !== null ? `${fmtUnits(minShares, SHARE_DECIMALS, 4)} ${cfg.shareSymbol ?? ""}` : "n/a"}
         </dd>
         <dt className="text-base-content/70">Deposit value</dt>
         <dd className="m-0 text-right font-mono tabular-nums">{usd !== undefined ? fmtUsd(usd) : "n/a"}</dd>
@@ -163,7 +163,7 @@ export function DepositPanel({ snap }: { snap: Snapshot }) {
         </dd>
       </dl>
 
-      <p className="m-0 text-xs text-base-content/60">
+      <p className="m-0 text-xs text-base-content/70">
         {firstDeposit
           ? `This is the first deposit. It sets the share price at 1 share per HBAR of value, and ${fmtUnits(cfg.deadShares, SHARE_DECIMALS, 5)} shares stay locked in the vault as dead shares so nobody can own the whole supply.`
           : "Estimate is value divided by share price. Pool fees and your own price impact come out of your shares, and the minimum reverts the deposit if they cost more than the slippage you allow."}

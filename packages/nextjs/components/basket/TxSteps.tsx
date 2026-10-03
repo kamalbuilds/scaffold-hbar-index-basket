@@ -44,10 +44,10 @@ export const TxSteps = ({ steps, runs }: { steps: PlannedStep[]; runs: Record<st
           </span>
           <div className="min-w-0 grow">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-              <span className={`text-sm ${!step.needed && !run ? "text-base-content/60" : "font-medium"}`}>
+              <span className={`text-sm ${!step.needed && !run ? "text-base-content/70" : "font-medium"}`}>
                 {step.label}
               </span>
-              <span className="text-xs text-base-content/60">
+              <span className="text-xs text-base-content/70">
                 {run ? STATUS_TEXT[run.status] : step.needed ? "Waiting" : "Not needed"}
                 {run?.hash && (
                   <>
@@ -59,7 +59,7 @@ export const TxSteps = ({ steps, runs }: { steps: PlannedStep[]; runs: Record<st
                 )}
               </span>
             </div>
-            {step.hint && !run && <p className="m-0 text-xs text-base-content/60">{step.hint}</p>}
+            {step.hint && !run && <p className="m-0 text-xs text-base-content/70">{step.hint}</p>}
             {run?.status === "failed" && run.error && (
               <p className="m-0 mt-1 text-xs text-error" role="alert">
                 {run.error}

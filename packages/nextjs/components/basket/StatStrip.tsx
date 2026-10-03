@@ -15,9 +15,9 @@ const Stat = ({
   tone?: "error";
 }) => (
   <div className="bg-base-100 p-5">
-    <dt className="text-xs font-medium text-base-content/60">{label}</dt>
+    <dt className="text-xs font-medium text-base-content/70">{label}</dt>
     <dd className="m-0 mt-2 font-mono text-2xl tabular-nums leading-none">{value}</dd>
-    <dd className={`m-0 mt-2 text-xs ${tone === "error" ? "text-error" : "text-base-content/60"}`}>{sub}</dd>
+    <dd className={`m-0 mt-2 text-xs ${tone === "error" ? "text-error" : "text-base-content/70"}`}>{sub}</dd>
   </div>
 );
 
@@ -42,7 +42,7 @@ export function StatStrip({ snap }: { snap: Snapshot }) {
         sub={
           lv.supply === 0n
             ? "The first deposit sets it at 1 share per HBAR of value"
-            : `${fmtUnits(lv.supply, SHARE_DECIMALS, 2)} ${cfg.shareSymbol ?? "shares"} outstanding`
+            : `${fmtUnits(lv.supply, SHARE_DECIMALS, 4)} ${cfg.shareSymbol ?? "shares"} outstanding`
         }
       />
       <Stat
@@ -59,7 +59,7 @@ export function StatStrip({ snap }: { snap: Snapshot }) {
       />
       <Stat
         label="Your shares"
-        value={mine !== undefined ? fmtUnits(mine, SHARE_DECIMALS, 4) : "n/a"}
+        value={mine !== undefined ? `${fmtUnits(mine, SHARE_DECIMALS, 4)} ${cfg.shareSymbol ?? ""}`.trim() : "n/a"}
         sub={
           mine === undefined
             ? vault.shares.isLoading

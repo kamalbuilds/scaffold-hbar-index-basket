@@ -25,12 +25,12 @@ export const Footer = () => {
       </div>
       <div className="w-full">
         <ul className="menu menu-horizontal w-full">
-          <div className="flex justify-center items-center gap-3 text-sm w-full text-base-content/60">
+          <div className="flex justify-center items-center gap-3 text-sm w-full text-base-content/70">
             <a
               href={hashscan.contract(VAULT_ADDRESS)}
               target="_blank"
               rel="noreferrer"
-              className="link hover:text-primary"
+              className="link -my-2 py-2 hover:text-primary"
             >
               Vault on HashScan
             </a>
@@ -41,13 +41,18 @@ export const Footer = () => {
                 href="https://hedera.com/"
                 target="_blank"
                 rel="noreferrer"
-                className="font-semibold link hover:text-primary"
+                className="font-semibold link -my-2 py-2 hover:text-primary"
               >
                 Hedera
               </a>
             </span>
             <span className="opacity-30">|</span>
-            <a href="https://docs.hedera.com/" target="_blank" rel="noreferrer" className="link hover:text-primary">
+            <a
+              href="https://docs.hedera.com/"
+              target="_blank"
+              rel="noreferrer"
+              className="link -my-2 py-2 hover:text-primary"
+            >
               Docs
             </a>
           </div>

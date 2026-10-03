@@ -14,7 +14,7 @@ export function TradePanel({ snap }: { snap: Snapshot }) {
             role="tab"
             type="button"
             aria-selected={tab === name}
-            className={`tab capitalize ${tab === name ? "tab-active font-semibold" : ""}`}
+            className={`tab capitalize ${tab === name ? "tab-active font-semibold" : "text-base-content/70"}`}
             onClick={() => setTab(name)}
           >
             {name}

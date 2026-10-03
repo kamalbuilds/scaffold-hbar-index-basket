@@ -8,6 +8,6 @@ export function useVaultEvents() {
     queryKey: ["basket", "events", VAULT_ADDRESS],
     enabled: IS_DEPLOYED,
     refetchInterval: POLL_MS,
-    queryFn: () => fetchVaultEvents(VAULT_ADDRESS, 25),
+    queryFn: () => fetchVaultEvents(VAULT_ADDRESS, 50),
   });
 }

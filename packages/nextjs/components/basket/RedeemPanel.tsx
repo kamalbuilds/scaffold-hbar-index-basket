@@ -100,10 +100,10 @@ export function RedeemPanel({ snap }: { snap: Snapshot }) {
       <label className="flex flex-col gap-2">
         <span className="flex items-baseline justify-between text-sm font-medium">
           Shares to redeem
-          <span className="text-xs font-normal text-base-content/60">
+          <span className="text-xs font-normal text-base-content/70">
             You hold{" "}
             <span className="font-mono tabular-nums">
-              {balance !== undefined ? fmtUnits(balance, SHARE_DECIMALS, 4) : "n/a"}
+              {balance !== undefined ? `${fmtUnits(balance, SHARE_DECIMALS, 4)} ${cfg.shareSymbol ?? ""}` : "n/a"}
             </span>
           </span>
         </span>
@@ -143,7 +143,7 @@ export function RedeemPanel({ snap }: { snap: Snapshot }) {
             </dd>
           </dl>
         ) : (
-          <p className="m-0 text-sm text-base-content/60">
+          <p className="m-0 text-sm text-base-content/70">
             {lv.supply === 0n
               ? "Nothing to redeem yet. Shares exist after the first deposit."
               : "Enter a share amount to see how much of each token it pays out."}
@@ -151,7 +151,7 @@ export function RedeemPanel({ snap }: { snap: Snapshot }) {
         )}
       </div>
 
-      <p className="m-0 text-xs text-base-content/60">
+      <p className="m-0 text-xs text-base-content/70">
         Redemption reads no price, so it works even while Chainlink is stale. The payout is each token as it stands in
         the vault when the transaction lands.
       </p>

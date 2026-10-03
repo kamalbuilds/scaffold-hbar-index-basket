@@ -33,6 +33,10 @@ export function fmtDuration(totalSeconds: number): string {
   return `${sec}s`;
 }
 
+/** Unix seconds as "Oct 3, 2026, 5:45 PM" in the viewer's locale. A numeric date reads as day-first or month-first depending on who looks. */
+export const fmtDateTime = (unixSeconds: number) =>
+  new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(unixSeconds * 1000));
+
 export const fmtAgo = (seconds: number) => `${fmtDuration(seconds)} ago`;
 
 export const shortAddress = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;

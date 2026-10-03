@@ -36,7 +36,7 @@ export function OwnerControls({ snap, runs }: { snap: Snapshot; runs: bigint | u
   return (
     <div className="mt-8 border-t border-base-300 pt-6">
       <h3 className="m-0 text-base font-semibold">Owner controls</h3>
-      <p className="m-0 mt-1 text-xs text-base-content/60">Visible because your wallet is the vault owner.</p>
+      <p className="m-0 mt-1 text-xs text-base-content/70">Visible because your wallet is the vault owner.</p>
 
       <div className="mt-4 flex flex-col gap-5">
         <div className="flex flex-col gap-2">
@@ -80,7 +80,7 @@ export function OwnerControls({ snap, runs }: { snap: Snapshot; runs: bigint | u
                   ))}
                 </select>
               </div>
-              <p className="m-0 text-xs text-base-content/60">
+              <p className="m-0 text-xs text-base-content/70">
                 Between {fmtDuration(cfg.minInterval)} and {fmtDuration(cfg.maxInterval)}.
                 {runs === 0n && " The vault holds no fuel for a run yet, so top it up first."}
               </p>
@@ -175,7 +175,7 @@ export function OwnerControls({ snap, runs }: { snap: Snapshot; runs: bigint | u
               Withdraw
             </button>
           </div>
-          <p className="m-0 text-xs text-base-content/60">
+          <p className="m-0 text-xs text-base-content/70">
             Basket tokens are out of reach of this call. Only native HBAR leaves.
           </p>
         </div>

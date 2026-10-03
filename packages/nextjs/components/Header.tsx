@@ -83,9 +83,14 @@ export const Header = () => {
             <HeaderMenuLinks />
           </ul>
         </details>
-        <Link href="/" passHref className="hidden lg:flex items-center gap-3 ml-4 mr-6 shrink-0">
+        <Link
+          href="/"
+          passHref
+          aria-label="Index Basket home"
+          className="flex items-center gap-3 mx-1 lg:ml-4 lg:mr-6 shrink-0"
+        >
           <Mark className="h-8 w-8" />
-          <span className="font-semibold leading-tight text-base tracking-tight">Index Basket</span>
+          <span className="hidden font-semibold leading-tight text-base tracking-tight sm:inline">Index Basket</span>
         </Link>
         <ul className="hidden lg:flex lg:flex-nowrap menu menu-horizontal px-1 gap-2">
           <HeaderMenuLinks />

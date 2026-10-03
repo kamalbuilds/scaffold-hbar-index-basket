@@ -1,15 +1,36 @@
+import { useState } from "react";
 import { type Hex, decodeErrorResult } from "viem";
 import { useNow } from "~~/hooks/basket/useNow";
 import type { Snapshot } from "~~/hooks/basket/useVault";
 import { useVaultEvents } from "~~/hooks/basket/useVaultEvents";
 import { SHARE_DECIMALS, VAULT_ABI, WHBAR_DECIMALS } from "~~/utils/basket/constants";
-import { fmtAgo, fmtDuration, fmtUnits, shortAddress } from "~~/utils/basket/format";
+import { fmtAgo, fmtDateTime, fmtDuration, fmtUnits, shortAddress } from "~~/utils/basket/format";
 import { evmToEntityId, hashscan } from "~~/utils/basket/hedera";
 import type { VaultEvent } from "~~/utils/basket/mirror";
 
 type Args = Record<string, any>;
 
+const COLLAPSED_ROWS = 10;
+
 const FAILURES = new Set(["ScheduledRunFailed", "BookingFailed"]);
+
+/** What kind of event a row is, in words. Every event in the vault ABI has one; an unknown name falls back to spaced words. */
+const KINDS: Record<string, string> = {
+  Deposited: "Deposit",
+  Redeemed: "Redeem",
+  Swapped: "Swap",
+  Rebalanced: "Rebalance",
+  RunBooked: "Run booked",
+  ScheduledRun: "Scheduled run",
+  ScheduledRunFailed: "Run failed",
+  BookingFailed: "Booking failed",
+  AutomationStarted: "Automation on",
+  AutomationStopped: "Automation off",
+  Initialized: "Share token",
+  OwnershipTransferred: "Ownership",
+};
+
+const kindOf = (name: string) => KINDS[name] ?? name.replace(/([a-z])([A-Z])/g, "$1 $2");
 
 function revertText(reason: Hex): string {
   try {
@@ -48,8 +69,13 @@ function describe(ev: VaultEvent, snap: Snapshot): React.ReactNode {
     case "RunBooked":
       return (
         <>
-          Booked the next rebalance for {new Date(Number(a.expiry) * 1000).toLocaleString()} on schedule{" "}
-          <a className="link link-primary" href={hashscan.schedule(a.schedule)} target="_blank" rel="noreferrer">
+          Booked the next rebalance for {fmtDateTime(Number(a.expiry))} on schedule{" "}
+          <a
+            className="link link-primary -my-2 inline-block py-2"
+            href={hashscan.schedule(a.schedule)}
+            target="_blank"
+            rel="noreferrer"
+          >
             {evmToEntityId(a.schedule)}
           </a>
         </>
@@ -68,6 +94,10 @@ function describe(ev: VaultEvent, snap: Snapshot): React.ReactNode {
       return "Automation stopped and the pending schedule was deleted.";
     case "Initialized":
       return "Share token created.";
+    case "OwnershipTransferred":
+      return BigInt(a.previousOwner) === 0n
+        ? `Vault deployed, owner ${shortAddress(a.newOwner)}.`
+        : `Ownership moved from ${shortAddress(a.previousOwner)} to ${shortAddress(a.newOwner)}.`;
     default:
       return ev.name;
   }
@@ -76,17 +106,19 @@ function describe(ev: VaultEvent, snap: Snapshot): React.ReactNode {
 export function ActivityFeed({ snap }: { snap: Snapshot }) {
   const events = useVaultEvents();
   const now = useNow(10_000);
+  const [expanded, setExpanded] = useState(false);
+  const rows = expanded ? events.data : events.data?.slice(0, COLLAPSED_ROWS);
 
   return (
     <section className="rounded-box border border-base-300 bg-base-100 p-6 lg:p-8" aria-labelledby="activity-title">
-      <div className="flex items-baseline justify-between gap-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2 id="activity-title" className="m-0 text-xl font-semibold">
           Activity
         </h2>
-        <span className="text-xs text-base-content/60">Decoded from the Hedera mirror node, refreshed every 15s</span>
+        <span className="text-xs text-base-content/70">Decoded from the Hedera mirror node, refreshed every 15s</span>
       </div>
 
-      {events.isLoading && <p className="m-0 mt-6 text-sm text-base-content/60">Reading the vault logs.</p>}
+      {events.isLoading && <p className="m-0 mt-6 text-sm text-base-content/70">Reading the vault logs.</p>}
       {events.isError && (
         <p className="m-0 mt-6 text-sm text-error" role="alert">
           The mirror node did not answer.{" "}
@@ -102,28 +134,39 @@ export function ActivityFeed({ snap }: { snap: Snapshot }) {
       )}
       {events.data && events.data.length > 0 && (
         <ul className="m-0 mt-4 list-none divide-y divide-base-300 p-0">
-          {events.data.map(ev => (
-            <li
-              key={ev.id}
-              className="flex flex-col gap-1 py-3 sm:grid sm:grid-cols-[6rem_11rem_1fr_auto] sm:items-baseline sm:gap-x-4"
-            >
-              <time
-                className="font-mono text-xs tabular-nums text-base-content/60"
-                dateTime={new Date(ev.at * 1000).toISOString()}
-                title={new Date(ev.at * 1000).toLocaleString()}
-              >
-                {now === null ? "" : fmtAgo(Math.max(0, now - ev.at))}
-              </time>
-              <span className={`font-mono text-xs ${FAILURES.has(ev.name) ? "text-error" : "text-base-content/70"}`}>
-                {ev.name}
-              </span>
+          {rows?.map(ev => (
+            <li key={ev.id} className="grid gap-x-4 gap-y-1 py-3 sm:grid-cols-[6rem_9rem_1fr_auto] sm:items-baseline">
+              <div className="flex items-baseline gap-3 sm:contents">
+                <time
+                  className="font-mono text-xs tabular-nums text-base-content/70"
+                  dateTime={new Date(ev.at * 1000).toISOString()}
+                  title={fmtDateTime(ev.at)}
+                >
+                  {now === null ? "" : fmtAgo(Math.max(0, now - ev.at))}
+                </time>
+                <span
+                  className={`text-xs font-medium ${FAILURES.has(ev.name) ? "text-error" : "text-base-content/70"}`}
+                >
+                  {kindOf(ev.name)}
+                </span>
+              </div>
               <span className={`text-sm ${FAILURES.has(ev.name) ? "text-error" : ""}`}>{describe(ev, snap)}</span>
-              <a className="link link-primary text-xs" href={hashscan.tx(ev.hash)} target="_blank" rel="noreferrer">
+              <a
+                className="link link-primary -my-2 self-start py-2 text-xs sm:self-auto"
+                href={hashscan.tx(ev.hash)}
+                target="_blank"
+                rel="noreferrer"
+              >
                 HashScan
               </a>
             </li>
           ))}
         </ul>
+      )}
+      {events.data && events.data.length > COLLAPSED_ROWS && (
+        <button type="button" className="btn btn-ghost btn-sm mt-2" onClick={() => setExpanded(e => !e)}>
+          {expanded ? "Show the latest 10" : `Show all ${events.data.length} events`}
+        </button>
       )}
     </section>
   );
