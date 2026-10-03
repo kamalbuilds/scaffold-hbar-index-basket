@@ -24,11 +24,13 @@ export type RunnableStep = {
 
 /** Wallet readiness for writes: connected, and on the chain the vault lives on. */
 export function useWalletReady() {
-  const { address, chain, isConnected } = useAccount();
+  const { address, chain } = useAccount();
   const { switchChain, isPending: switching } = useSwitchChain();
   return {
     address,
-    isConnected,
+    // The burner connector can sit in "connecting" with its address already restored, and still signs, so an
+    // address is what sending needs. wagmi never reports an address while disconnected.
+    isConnected: address !== undefined,
     onTarget: chain?.id === CHAIN_ID,
     switchToTarget: () => switchChain({ chainId: CHAIN_ID }),
     switching,
