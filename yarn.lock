@@ -9953,6 +9953,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"scaffold-hbar-index-basket@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "scaffold-hbar-index-basket@workspace:."
+  dependencies:
+    husky: ^9.1.6
+    lint-staged: ^15.2.10
+  languageName: unknown
+  linkType: soft
+
 "scheduler@npm:^0.27.0":
   version: 0.27.0
   resolution: "scheduler@npm:0.27.0"
@@ -10035,15 +10044,6 @@ __metadata:
   checksum: ec27cbbe334598547e99024403e96da32aca3e530583e4dba7f5db1c43cbc4affa9adfbd77c7b2c210b9b8b2e7b2e600bad2a6c44fd62e804d8233f96bbb62f4
   languageName: node
   linkType: hard
-
-"sh@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "sh@workspace:."
-  dependencies:
-    husky: ^9.1.6
-    lint-staged: ^15.2.10
-  languageName: unknown
-  linkType: soft
 
 "sha.js@npm:^2.4.11":
   version: 2.4.12

@@ -1,10 +1,9 @@
 {
-  "name": "sh",
+  "name": "scaffold-hbar-index-basket",
   "version": "0.0.1",
   "private": true,
   "workspaces": {
     "packages": [
-      "packages/hardhat",
       "packages/nextjs",
       "packages/foundry"
     ]
@@ -29,24 +28,8 @@
     "foundry:lint-staged": "yarn workspace @sh/foundry lint-staged",
     "foundry:verify:testnet": "yarn workspace @sh/foundry verify:testnet",
     "foundry:verify:mainnet": "yarn workspace @sh/foundry verify:mainnet",
-    "format": "yarn next:format && yarn hardhat:format && yarn foundry:format",
-    "hardhat:account": "yarn workspace @sh/hardhat account",
-    "hardhat:account:generate": "yarn workspace @sh/hardhat account:generate",
-    "hardhat:account:import": "yarn workspace @sh/hardhat account:import",
-    "hardhat:account:reveal-pk": "yarn workspace @sh/hardhat account:reveal-pk",
-    "hardhat:chain": "yarn workspace @sh/hardhat chain",
-    "hardhat:check-types": "yarn workspace @sh/hardhat check-types",
-    "hardhat:clean": "yarn workspace @sh/hardhat clean",
-    "hardhat:compile": "yarn workspace @sh/hardhat compile",
-    "hardhat:deploy": "yarn workspace @sh/hardhat deploy",
-    "hardhat:flatten": "yarn workspace @sh/hardhat flatten",
-    "hardhat:fork": "yarn workspace @sh/hardhat fork",
-    "hardhat:format": "yarn workspace @sh/hardhat format",
-    "hardhat:lint": "yarn workspace @sh/hardhat lint",
-    "hardhat:lint-staged": "yarn workspace @sh/hardhat lint-staged",
-    "hardhat:test": "yarn workspace @sh/hardhat test",
-    "hardhat:verify": "yarn workspace @sh/hardhat verify:contract",
-    "lint": "yarn next:lint && yarn hardhat:lint && yarn foundry:lint",
+    "format": "yarn next:format && yarn foundry:format",
+    "lint": "yarn next:lint && yarn foundry:lint",
     "next:build": "yarn workspace @sh/nextjs build",
     "next:check-types": "yarn workspace @sh/nextjs check-types",
     "next:dev": "yarn workspace @sh/nextjs dev",

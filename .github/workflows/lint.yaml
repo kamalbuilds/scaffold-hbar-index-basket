@@ -1,4 +1,4 @@
-name: Lint
+name: CI
 
 on:
   push:
@@ -10,12 +10,7 @@ on:
 
 jobs:
   ci:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        node: [lts/*]
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -24,19 +19,24 @@ jobs:
           submodules: recursive
 
       - name: Setup node env
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: lts/*
           cache: yarn
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
 
       - name: Install dependencies
         run: yarn install --immutable
 
-      - name: Run Hardhat node and deploy contracts
+      - name: Contract tests
+        run: yarn foundry:test
+
+      - name: Solidity lint and format
         run: |
-          yarn hardhat:chain &
-          timeout 60s bash -c 'until curl -s -X POST http://127.0.0.1:8545 -H "Content-Type: application/json" --data "{\"jsonrpc\":\"2.0\",\"method\":\"web3_clientVersion\",\"params\":[],\"id\":1}" >/dev/null; do sleep 2; done'
-          yarn hardhat:deploy --network localhost
+          yarn foundry:lint
+          cd packages/foundry && forge fmt --check contracts test script
 
       - name: Run nextjs lint
         run: yarn next:lint --max-warnings=0
@@ -44,5 +44,5 @@ jobs:
       - name: Check typings on nextjs
         run: yarn next:check-types
 
-      - name: Run hardhat lint
-        run: yarn hardhat:lint --max-warnings=0
+      - name: Build the app
+        run: yarn next:build

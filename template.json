@@ -1,10 +1,11 @@
 {
-  "name": "blank",
-  "description": "Minimal Scaffold-HBAR starter: Next.js, Hardhat or Foundry, sample HTS contracts, no opinionated product UI.",
+  "name": "index-basket",
+  "description": "Tokenised index fund on Hedera: one HBAR deposit buys a weighted basket on SaucerSwap V2, mints an HTS share token, redeems in kind, and rebalances itself through the Hedera Schedule Service with Chainlink USD pricing.",
+  "version": "1.0.0",
   "create-scaffold-hbar": {
     "capabilities": {
       "frontend": ["nextjs-app"],
-      "solidityFramework": ["foundry", "hardhat"],
+      "solidityFramework": ["foundry"],
       "packageManager": ["yarn", "npm"]
     },
     "defaults": {
@@ -12,29 +13,39 @@
       "solidityFramework": "foundry",
       "packageManager": "yarn"
     },
+    "requirements": {
+      "node": ">=20.18.3"
+    },
     "outro": {
       "sections": [
+        {
+          "steps": [
+            {
+              "text": "BasketVault buys WHBAR, SAUCE and USDC on SaucerSwap V2, mints an HTS share token, and books its own rebalances with the Hedera Schedule Service. Contracts run against Hedera testnet; there is no local chain step."
+            }
+          ]
+        },
         {
           "title": "Next steps",
           "steps": [
             {
-              "label": "Generate or import a deployer account",
-              "command": "{run:framework:account:generate}"
+              "label": "Run the contract tests",
+              "command": "{run:foundry:test}"
             },
             {
-              "label": "Start a local chain",
-              "command": "{run:framework:chain}"
+              "label": "Fund an ECDSA testnet account",
+              "url": "https://portal.hedera.com/faucet"
             },
             {
-              "label": "Deploy contracts to that node",
-              "command": "{run:framework:deploy} --network localhost"
+              "label": "Put its key in packages/foundry/.env as DEPLOYER_PRIVATE_KEY, then deploy and run every flow on testnet",
+              "command": "{run:foundry:live}"
             },
             {
-              "label": "Start the frontend",
+              "label": "Start the app",
               "command": "{run:next:dev}"
             },
             {
-              "text": "For Hedera testnet/mainnet deploy and verify, see the Scaffold HBAR docs and your chosen package README under packages/hardhat or packages/foundry."
+              "text": "README.md walks through the design; AGENTS.md briefs coding agents."
             }
           ]
         }
