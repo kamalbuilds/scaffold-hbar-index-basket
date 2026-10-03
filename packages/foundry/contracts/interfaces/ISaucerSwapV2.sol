@@ -33,6 +33,11 @@ interface ISaucerSwapV2Pool {
         );
 }
 
+/// The slice of the SaucerSwap V2 factory the vault uses to prove a pool is the canonical one for its pair.
+interface ISaucerSwapV2Factory {
+    function getPool(address tokenA, address tokenB, uint24 fee) external view returns (address pool);
+}
+
 /// SaucerSwap's WhbarHelper: `deposit()` credits the caller with WHBAR for the HBAR sent.
 interface IWhbarHelper {
     function deposit() external payable;

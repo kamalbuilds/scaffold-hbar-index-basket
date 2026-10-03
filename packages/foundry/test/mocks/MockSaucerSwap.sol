@@ -83,6 +83,17 @@ contract MockRouter is ISaucerSwapV2Router {
     }
 }
 
+/// @notice The SaucerSwap V2 factory: the one place that says which pool is canonical for a pair and fee.
+contract MockFactory {
+    mapping(address tokenA => mapping(address tokenB => mapping(uint24 fee => address))) public getPool;
+
+    function registerPool(address pool) external {
+        MockPool p = MockPool(pool);
+        getPool[p.token0()][p.token1()][p.fee()] = pool;
+        getPool[p.token1()][p.token0()][p.fee()] = pool;
+    }
+}
+
 /// @notice SaucerSwap's WhbarHelper: `deposit()` credits the caller with WHBAR 1:1 for the HBAR sent (tinybars).
 contract MockWhbarHelper {
     MockHtsToken public immutable whbar;
@@ -102,14 +113,15 @@ contract MockWhbarHelper {
 contract MockAggregator {
     int256 public answer;
     uint256 public updatedAt;
+    uint8 public decimals = 8;
+
+    function setDecimals(uint8 decimals_) external {
+        decimals = decimals_;
+    }
 
     function set(int256 answer_, uint256 updatedAt_) external {
         answer = answer_;
         updatedAt = updatedAt_;
-    }
-
-    function decimals() external pure returns (uint8) {
-        return 8;
     }
 
     function latestRoundData() external view returns (uint80, int256, uint256, uint256, uint80) {

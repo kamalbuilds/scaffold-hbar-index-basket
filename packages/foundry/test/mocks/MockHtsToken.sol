@@ -9,7 +9,7 @@ import { IHRC719 } from "../../contracts/interfaces/IHRC719.sol";
 /// `associate()`. As on Hedera, an account cannot receive the token until it is associated with it, and
 /// `transferFrom` over the allowance or the balance reverts without revert data. With `quietFailure` set
 /// it returns false instead. Given a maximum supply, the token refuses an allowance above it, as a
-/// finite-supply HTS token does. `approveCount` and `lastApproveValue` let tests assert how often, and
+/// finite-supply HTS token does. `freeze` blocks an account from sending or receiving, as a freeze key does. `approveCount` and `lastApproveValue` let tests assert how often, and
 /// for how much, a contract pays for an approval.
 contract MockHtsToken is ERC20, IHRC719 {
     int64 private constant SUCCESS = 22;
@@ -27,7 +27,11 @@ contract MockHtsToken is ERC20, IHRC719 {
 
     event Associated(address indexed account);
 
+    /// Accounts the token's freeze key has frozen: they can neither send nor receive it.
+    mapping(address account => bool) public frozen;
+
     error TokenNotAssociatedToAccount(address account);
+    error AccountFrozenForToken(address account);
     error AmountExceedsTokenMaxSupply();
 
     constructor(string memory name_, string memory symbol_, uint8 decimals_) ERC20(name_, symbol_) {
@@ -40,6 +44,10 @@ contract MockHtsToken is ERC20, IHRC719 {
 
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
+    }
+
+    function freeze(address account, bool isFrozen) external {
+        frozen[account] = isFrozen;
     }
 
     function setQuietFailure(bool quiet) external {
@@ -79,6 +87,8 @@ contract MockHtsToken is ERC20, IHRC719 {
 
     function _update(address from, address to, uint256 value) internal override {
         if (to != address(0) && !associated[to]) revert TokenNotAssociatedToAccount(to);
+        if (frozen[from]) revert AccountFrozenForToken(from);
+        if (frozen[to]) revert AccountFrozenForToken(to);
         super._update(from, to, value);
     }
 }

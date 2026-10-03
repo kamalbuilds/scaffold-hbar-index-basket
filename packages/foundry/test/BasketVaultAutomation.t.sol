@@ -53,7 +53,7 @@ contract BasketVaultAutomationTest is BasketVaultBase {
 
         vm.prank(owner);
         vault.startAutomation(max);
-        assertEq(hss.callAt(0).expirySecond, T0 + max);
+        assertEq(hss.callAt(0).expirySecond, T0 + max + _jitter());
     }
 
     function test_start_booksARunnableScheduleWithTheConfiguredGas() public {
@@ -64,7 +64,7 @@ contract BasketVaultAutomationTest is BasketVaultBase {
         assertEq(hss.callCount(), 1);
         MockHss.ScheduledCall memory c = hss.callAt(0);
         assertEq(c.to, address(vault), "the vault schedules a call to itself");
-        assertEq(c.expirySecond, T0 + INTERVAL);
+        assertEq(c.expirySecond, T0 + INTERVAL + _jitter());
         assertEq(c.gasLimit, SCHEDULED_GAS);
         assertEq(c.gasLimit, 3_000_000);
         assertEq(c.value, 0);
@@ -100,7 +100,7 @@ contract BasketVaultAutomationTest is BasketVaultBase {
     // ---------------------------------------------------------------- capacity probe
 
     function _expiryWhenBusy(uint256[] memory delays) internal returns (uint256 expiry) {
-        uint256 ideal = T0 + INTERVAL;
+        uint256 ideal = T0 + INTERVAL + _jitter();
         for (uint256 i; i < delays.length; ++i) {
             hss.setBusy(ideal + delays[i], true);
         }
@@ -109,13 +109,13 @@ contract BasketVaultAutomationTest is BasketVaultBase {
     }
 
     function test_capacity_usesTheIdealSecondWhenFree() public {
-        assertEq(_expiryWhenBusy(new uint256[](0)), T0 + INTERVAL);
+        assertEq(_expiryWhenBusy(new uint256[](0)), T0 + INTERVAL + _jitter());
     }
 
     function test_capacity_picksIdealPlusDelayWhenIdealIsBusy() public {
         uint256[] memory busy = new uint256[](1);
         busy[0] = 0;
-        assertEq(_expiryWhenBusy(busy), T0 + INTERVAL + 1);
+        assertEq(_expiryWhenBusy(busy), T0 + INTERVAL + _jitter() + 1);
     }
 
     function test_capacity_backsOffExponentially() public {
@@ -123,22 +123,24 @@ contract BasketVaultAutomationTest is BasketVaultBase {
         busy[0] = 0;
         busy[1] = 1;
         busy[2] = 2;
-        assertEq(_expiryWhenBusy(busy), T0 + INTERVAL + 4, "probes 1, 2, 4: the first free one wins");
+        assertEq(_expiryWhenBusy(busy), T0 + INTERVAL + _jitter() + 4, "probes 1, 2, 4: the first free one wins");
     }
 
     function test_capacity_reachesTheLongestProbe() public {
-        uint256[] memory busy = new uint256[](5);
+        uint256[] memory busy = new uint256[](7);
         busy[0] = 0;
         busy[1] = 1;
         busy[2] = 2;
         busy[3] = 4;
         busy[4] = 8;
-        assertEq(_expiryWhenBusy(busy), T0 + INTERVAL + 16);
+        busy[5] = 16;
+        busy[6] = 32;
+        assertEq(_expiryWhenBusy(busy), T0 + INTERVAL + _jitter() + 64);
     }
 
     function test_capacity_failsWithBusyCodeWhenEverySlotIsTaken() public {
-        uint256 ideal = T0 + INTERVAL;
-        uint256[6] memory busy = [uint256(0), 1, 2, 4, 8, 16];
+        uint256 ideal = T0 + INTERVAL + _jitter();
+        uint256[8] memory busy = [uint256(0), 1, 2, 4, 8, 16, 32, 64];
         for (uint256 i; i < busy.length; ++i) {
             hss.setBusy(ideal + busy[i], true);
         }
@@ -199,7 +201,9 @@ contract BasketVaultAutomationTest is BasketVaultBase {
 
         assertEq(hss.callCount(), 2);
         MockHss.ScheduledCall memory next = hss.callAt(1);
-        assertEq(next.expirySecond, T0 + INTERVAL + INTERVAL, "the next run is one interval after this one");
+        uint256 gap = next.expirySecond - hss.callAt(0).expirySecond;
+        assertGe(gap, INTERVAL, "the next run is one interval after this one");
+        assertLt(gap, INTERVAL + 30);
         assertEq(next.gasLimit, SCHEDULED_GAS);
         assertEq(next.callData, abi.encodeCall(vault.runScheduled, ()));
         assertEq(vault.pendingSchedule(), next.schedule);
@@ -223,7 +227,12 @@ contract BasketVaultAutomationTest is BasketVaultBase {
             assertEq(hss.callCount(), i + 2);
             assertEq(vault.pendingSchedule(), hss.callAt(i + 1).schedule);
         }
-        assertEq(hss.callAt(3).expirySecond, T0 + 4 * INTERVAL);
+        // Every run is booked a jittered interval after the one before it.
+        for (uint256 i = 1; i < 4; ++i) {
+            uint256 gap = hss.callAt(i).expirySecond - hss.callAt(i - 1).expirySecond;
+            assertGe(gap, INTERVAL);
+            assertLt(gap, INTERVAL + 30);
+        }
     }
 
     function test_scheduledRun_neverRevertsWhenTheRebalanceDoes_andStillBooksTheNextRun() public {
@@ -289,7 +298,7 @@ contract BasketVaultAutomationTest is BasketVaultBase {
         assertEq(hss.callAt(1).responseCode, int64(373));
         assertEq(vault.pendingSchedule(), address(0));
         assertEq(vault.nextRunAt(), 0);
-        assertEq(vault.rebalanceInterval(), 0, "a lost booking turns automation off");
+        assertEq(vault.rebalanceInterval(), INTERVAL, "a lost booking keeps automation on, rearm books again");
     }
 
     function test_scheduledRun_doesNothingOnceAutomationIsStopped() public {
@@ -346,22 +355,151 @@ contract BasketVaultAutomationTest is BasketVaultBase {
         vm.prank(owner);
         vault.startAutomation(2 hours);
         assertEq(hss.callCount(), 2);
-        assertEq(hss.callAt(1).expirySecond, T0 + 2 hours);
+        assertEq(hss.callAt(1).expirySecond, T0 + 2 hours + _jitter());
         assertEq(vault.pendingSchedule(), hss.callAt(1).schedule);
     }
 
-    function test_lostBooking_turnsAutomationOffAndAllowsRestart() public {
+    function test_lostBooking_keepsTheIntervalSoAnyoneCanRearm() public {
         _deposit(alice, D1);
         _start();
         hss.setForcedCodes(int64(373), 0);
         _runSchedule(0, true);
-        assertEq(vault.pendingSchedule(), address(0));
-        assertEq(vault.rebalanceInterval(), 0);
+        assertEq(vault.pendingSchedule(), address(0), "the chain is broken");
+        assertEq(vault.rebalanceInterval(), INTERVAL, "but automation was not switched off");
 
         hss.setForcedCodes(0, 0);
-        vm.prank(owner);
-        vault.startAutomation(INTERVAL);
+        uint256 calls = hss.callCount();
+        vm.prank(alice);
+        vault.rearm();
+        assertEq(hss.callCount(), calls + 1, "rearm made one booking");
+        assertEq(vault.pendingSchedule(), hss.callAt(calls).schedule);
+        assertEq(vault.nextRunAt(), hss.callAt(calls).expirySecond);
+        assertGt(vault.nextRunAt(), block.timestamp);
+
+        // And the rearmed schedule runs and chains on like any other.
+        (bool ok,) = _runSchedule(calls, true);
+        assertTrue(ok);
         assertTrue(vault.pendingSchedule() != address(0));
+    }
+
+    function test_rearm_isPermissionlessAndPaidFromTheVault() public {
+        _start();
+        hss.setForcedCodes(int64(373), 0);
+        _runSchedule(0, true);
+        hss.setForcedCodes(0, 0);
+        uint256 callerBalance = keeper.balance;
+        vm.prank(keeper);
+        vault.rearm();
+        assertEq(keeper.balance, callerBalance, "the caller sends and receives nothing");
+        assertTrue(vault.pendingSchedule() != address(0));
+    }
+
+    function test_rearm_revertsWhileARunIsPending() public {
+        _start();
+        address pending = vault.pendingSchedule();
+        vm.prank(keeper);
+        vm.expectRevert(abi.encodeWithSelector(BasketVault.RunAlreadyPending.selector, pending));
+        vault.rearm();
+        assertEq(hss.callCount(), 1, "no second booking");
+    }
+
+    function test_rearm_revertsWhenAutomationIsOff() public {
+        vm.prank(keeper);
+        vm.expectRevert(BasketVault.NotAutomated.selector);
+        vault.rearm();
+
+        _start();
+        vm.prank(owner);
+        vault.stopAutomation();
+        vm.prank(keeper);
+        vm.expectRevert(BasketVault.NotAutomated.selector);
+        vault.rearm();
+        assertEq(hss.callCount(), 1);
+    }
+
+    function test_rearm_revertsWithTheCodeWhenTheBookingIsRefusedAgain() public {
+        _start();
+        hss.setForcedCodes(int64(373), 0);
+        _runSchedule(0, true);
+        vm.prank(keeper);
+        vm.expectRevert(abi.encodeWithSelector(BasketVault.ScheduleFailed.selector, int64(373)));
+        vault.rearm();
+        assertEq(vault.rebalanceInterval(), INTERVAL);
+    }
+
+    function test_attacker_fillingEverySecondTheProbeCouldPickCannotSwitchAutomationOff() public {
+        // The report's attack: book schedules into the seconds the successor will probe. With the jitter the
+        // attacker must also guess the draw; here they guess it right and still only delay the chain.
+        vm.deal(address(vault), 100e8);
+        _start();
+        uint256 ideal = vault.nextRunAt() + INTERVAL;
+        vm.warp(vault.nextRunAt());
+        feed.set(HBAR_USD, block.timestamp);
+        ideal = block.timestamp + INTERVAL + _jitter();
+        uint256[8] memory probes = [uint256(0), 1, 2, 4, 8, 16, 32, 64];
+        for (uint256 i; i < probes.length; ++i) {
+            hss.setBusy(ideal + probes[i], true);
+        }
+        vm.prank(address(vault));
+        vault.runScheduled();
+        assertEq(vault.rebalanceInterval(), INTERVAL, "automation is still on");
+        assertEq(vault.pendingSchedule(), address(0), "the successor was refused");
+
+        for (uint256 i; i < probes.length; ++i) {
+            hss.setBusy(ideal + probes[i], false);
+        }
+        vm.prank(keeper);
+        vault.rearm();
+        assertTrue(vault.pendingSchedule() != address(0), "anyone re-arms it");
+    }
+
+    function test_booking_jitterStaysInsideThirtySecondsAndFollowsChainRandomness() public {
+        uint256 snap = vm.snapshotState();
+        uint256[] memory seen = new uint256[](40);
+        uint256 distinct;
+        for (uint256 r; r < 40; ++r) {
+            vm.revertToState(snap);
+            vm.prevrandao(bytes32(r + 1));
+            _start();
+            uint256 jitter = vault.nextRunAt() - (T0 + INTERVAL);
+            assertLt(jitter, 30, "jitter is 0..29 seconds");
+            bool fresh = true;
+            for (uint256 k; k < r; ++k) {
+                if (seen[k] == jitter) fresh = false;
+            }
+            seen[r] = jitter;
+            if (fresh) ++distinct;
+        }
+        assertGt(distinct, 10, "the booking second moves with prevrandao, so it cannot be filled in advance");
+    }
+
+    function test_stop_emitsTheDeleteResponseCode() public {
+        _start();
+        address pending = vault.pendingSchedule();
+        vm.expectEmit(address(vault));
+        emit BasketVault.ScheduleDeleted(pending, SUCCESS);
+        vm.prank(owner);
+        vault.stopAutomation();
+    }
+
+    function test_stop_doesNotRevertWhenTheScheduleAlreadyRanOrExpired() public {
+        _start();
+        address pending = vault.pendingSchedule();
+        for (uint256 i; i < 3; ++i) {
+            int64 code = i == 0 ? int64(201) : (i == 1 ? int64(212) : int64(213));
+            hss.setForcedCodes(0, code);
+            vm.expectEmit(address(vault));
+            emit BasketVault.ScheduleDeleted(pending, code);
+            vm.prank(owner);
+            vault.stopAutomation();
+            assertEq(vault.rebalanceInterval(), 0, "automation is off whatever deleteSchedule said");
+            assertEq(vault.pendingSchedule(), address(0));
+            hss.setForcedCodes(0, 0);
+            if (i < 2) {
+                _start();
+                pending = vault.pendingSchedule();
+            }
+        }
     }
 
     // ---------------------------------------------------------------- withdrawFuel

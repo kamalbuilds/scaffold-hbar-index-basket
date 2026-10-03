@@ -7,7 +7,7 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { BasketVault } from "../contracts/BasketVault.sol";
 import { MockHtsToken } from "./mocks/MockHtsToken.sol";
 import { MockShareToken, MockHts, MockHss } from "./mocks/MockHederaSystem.sol";
-import { MockPool, MockRouter, MockWhbarHelper, MockAggregator } from "./mocks/MockSaucerSwap.sol";
+import { MockPool, MockRouter, MockFactory, MockWhbarHelper, MockAggregator } from "./mocks/MockSaucerSwap.sol";
 
 /// Fixture for every BasketVault test: Hedera system contracts etched at 0x167 and 0x16b, three HTS tokens at fixed
 /// addresses chosen so one leg sorts below WHBAR in its pool and the other above it, a priced pool per leg, a router
@@ -27,6 +27,7 @@ abstract contract BasketVaultBase is Test {
     uint256 internal constant MAX_ORACLE_AGE = 26 hours;
     uint256 internal constant DRIFT_BPS = 200;
     uint256 internal constant SLIPPAGE_BPS = 100;
+    uint256 internal constant MAX_TRADE_BPS = 2000;
     uint256 internal constant GUARD_DEVIATION_BPS = 500;
     uint256 internal constant SCHEDULED_GAS = 3_000_000;
     uint24 internal constant SAUCE_FEE = 3000;
@@ -53,6 +54,7 @@ abstract contract BasketVaultBase is Test {
     MockPool internal saucePool;
     MockPool internal usdcPool;
     MockRouter internal router;
+    MockFactory internal factory;
     MockWhbarHelper internal helper;
     MockAggregator internal feed;
     MockHts internal hts = MockHts(HTS_ADDR);
@@ -75,6 +77,7 @@ abstract contract BasketVaultBase is Test {
         usdc = MockHtsToken(USDC_ADDR);
 
         router = new MockRouter();
+        factory = new MockFactory();
         helper = new MockWhbarHelper(WHBAR_ADDR);
         feed = new MockAggregator();
         feed.set(HBAR_USD, T0);
@@ -85,6 +88,8 @@ abstract contract BasketVaultBase is Test {
         _setPrice(usdcPool, USDC_ADDR, USDC_PRICE_NUM, USDC_PRICE_DEN);
         router.registerPool(address(saucePool));
         router.registerPool(address(usdcPool));
+        factory.registerPool(address(saucePool));
+        factory.registerPool(address(usdcPool));
 
         vault = _deployVault(_config(), _legs());
         _initialize();
@@ -97,12 +102,14 @@ abstract contract BasketVaultBase is Test {
     function _config() internal view returns (BasketVault.Config memory) {
         return BasketVault.Config({
             router: address(router),
+            factory: address(factory),
             whbarHelper: address(helper),
             whbar: WHBAR_ADDR,
             hbarUsdFeed: address(feed),
             maxOracleAge: MAX_ORACLE_AGE,
             driftBps: DRIFT_BPS,
             slippageBps: SLIPPAGE_BPS,
+            maxTradeBps: MAX_TRADE_BPS,
             scheduledGas: SCHEDULED_GAS,
             guardLeg: 1,
             maxDeviationBps: GUARD_DEVIATION_BPS
@@ -164,6 +171,17 @@ abstract contract BasketVaultBase is Test {
     function _deposit(address user, uint256 amount) internal returns (uint256 shares) {
         vm.prank(user);
         shares = vault.deposit{ value: amount }(0);
+    }
+
+    /// The owner is the only outside caller `rebalance` accepts.
+    function _rebalance() internal returns (bool traded) {
+        vm.prank(owner);
+        traded = vault.rebalance();
+    }
+
+    /// The second a booking lands past the ideal one. Mirrors the vault's draw, so tests can aim at it.
+    function _jitter() internal view returns (uint256) {
+        return uint256(keccak256(abi.encode(blockhash(block.number - 1), block.prevrandao))) % 30;
     }
 
     function _redeem(address user, uint256 shares) internal returns (uint256 whbarOut, uint256[] memory legAmounts) {

@@ -6,7 +6,7 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { BasketVault } from "../contracts/BasketVault.sol";
 import { MockHtsToken } from "./mocks/MockHtsToken.sol";
 import { MockShareToken } from "./mocks/MockHederaSystem.sol";
-import { MockPool } from "./mocks/MockSaucerSwap.sol";
+import { MockPool, MockFactory } from "./mocks/MockSaucerSwap.sol";
 import { BasketVaultBase } from "./BasketVaultBase.sol";
 
 contract BasketVaultConstructorTest is BasketVaultBase {
@@ -151,6 +151,104 @@ contract BasketVaultConstructorTest is BasketVaultBase {
 
         c.slippageBps = 9_999;
         _deployVault(c, _legs());
+    }
+
+    function test_constructor_storesTheFactoryAndTradeCap() public view {
+        assertEq(address(vault.factory()), address(factory));
+        assertEq(vault.maxTradeBps(), MAX_TRADE_BPS);
+    }
+
+    function test_constructor_rejectsAPoolTheFactoryDoesNotKnow() public {
+        // Same tokens and fee as the real pool, deployed by someone else: the factory has never heard of it.
+        MockPool fake = new MockPool(SAUCE_ADDR, WHBAR_ADDR, SAUCE_FEE);
+        BasketVault.LegConfig[] memory legs = _legs();
+        legs[0].pool = address(fake);
+        _expectBadConfig();
+        _deployVault(_config(), legs);
+    }
+
+    function test_constructor_rejectsAPoolRegisteredUnderAnotherFee() public {
+        // The factory's pool for SAUCE/WHBAR at 0.05% is a different contract from the one claimed at 0.30%.
+        MockPool otherTier = new MockPool(SAUCE_ADDR, WHBAR_ADDR, 500);
+        factory.registerPool(address(otherTier));
+        BasketVault.LegConfig[] memory legs = _legs();
+        legs[0].pool = address(otherTier);
+        _deployVault(_config(), legs); // the real 0.05% pool is accepted
+
+        MockFactory empty = new MockFactory();
+        BasketVault.Config memory c = _config();
+        c.factory = address(empty);
+        _expectBadConfig();
+        _deployVault(c, _legs());
+    }
+
+    function test_constructor_rejectsAZeroFactory() public {
+        BasketVault.Config memory c = _config();
+        c.factory = address(0);
+        _expectBadConfig();
+        _deployVault(c, _legs());
+    }
+
+    function test_constructor_rejectsDuplicateLegTokens() public {
+        BasketVault.LegConfig[] memory legs = _legs();
+        legs[1] = legs[0];
+        legs[1].weightBps = 2000;
+        _expectBadConfig();
+        _deployVault(_config(), legs);
+    }
+
+    function test_constructor_rejectsWhbarAsALegToken() public {
+        MockPool self = new MockPool(WHBAR_ADDR, WHBAR_ADDR, 3000);
+        factory.registerPool(address(self));
+        BasketVault.LegConfig[] memory legs = _legs();
+        legs[0] = BasketVault.LegConfig(WHBAR_ADDR, address(self), 3000);
+        _expectBadConfig();
+        _deployVault(_config(), legs);
+    }
+
+    function test_constructor_rejectsZeroSlippage() public {
+        // A zero tolerance makes every swap revert, since the pool fee alone puts the fill under spot.
+        BasketVault.Config memory c = _config();
+        c.slippageBps = 0;
+        _expectBadConfig();
+        _deployVault(c, _legs());
+    }
+
+    function test_constructor_rejectsTradeCapZeroOrAboveOneHundredPercent() public {
+        BasketVault.Config memory c = _config();
+        c.maxTradeBps = 0;
+        _expectBadConfig();
+        _deployVault(c, _legs());
+
+        c.maxTradeBps = 10_001;
+        _expectBadConfig();
+        _deployVault(c, _legs());
+
+        c.maxTradeBps = 10_000;
+        _deployVault(c, _legs());
+    }
+
+    function test_constructor_rejectsZeroOracleAge() public {
+        BasketVault.Config memory c = _config();
+        c.maxOracleAge = 0;
+        _expectBadConfig();
+        _deployVault(c, _legs());
+    }
+
+    function test_constructor_rejectsAnEnabledGuardWithNoTolerance() public {
+        BasketVault.Config memory c = _config();
+        c.maxDeviationBps = 0;
+        _expectBadConfig();
+        _deployVault(c, _legs());
+
+        c.guardLeg = type(uint256).max; // guard off: the tolerance is unused
+        _deployVault(c, _legs());
+    }
+
+    function test_constructor_rejectsAFeedThatIsNotEightDecimals() public {
+        feed.setDecimals(18);
+        _expectBadConfig();
+        _deployVault(_config(), _legs());
     }
 
     function test_constructor_rejectsDriftZeroOrAboveOneHundredPercent() public {

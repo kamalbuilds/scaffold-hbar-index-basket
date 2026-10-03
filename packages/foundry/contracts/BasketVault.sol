@@ -10,7 +10,12 @@ import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { IHederaTokenService } from "./interfaces/IHederaTokenService.sol";
 import { IHederaScheduleService } from "./interfaces/IHederaScheduleService.sol";
 import { IHRC719 } from "./interfaces/IHRC719.sol";
-import { ISaucerSwapV2Router, ISaucerSwapV2Pool, IWhbarHelper } from "./interfaces/ISaucerSwapV2.sol";
+import {
+    ISaucerSwapV2Router,
+    ISaucerSwapV2Pool,
+    ISaucerSwapV2Factory,
+    IWhbarHelper
+} from "./interfaces/ISaucerSwapV2.sol";
 import { AggregatorV3Interface } from "./interfaces/AggregatorV3Interface.sol";
 
 /// @title BasketVault
@@ -46,8 +51,11 @@ contract BasketVault is Ownable, ReentrancyGuard {
     uint8 private constant SHARE_DECIMALS = 8;
     /// @notice Shares the first deposit locks in the vault's treasury, as a share-inflation defence.
     uint256 public constant DEAD_SHARES = 1e5;
-    /// Seconds past the ideal expiry to probe for a free slot: 1, 2, 4, 8, 16.
-    uint256 private constant MAX_CAPACITY_DELAY = 16;
+    /// Seconds past the ideal expiry to probe for a free slot: 1, 2, 4, 8, 16, 32, 64.
+    uint256 private constant MAX_CAPACITY_DELAY = 64;
+    /// A booking lands 0..BOOKING_JITTER-1 seconds after the ideal second, drawn from chain randomness at booking
+    /// time, so nobody can fill the exact seconds a run will probe a full interval ahead.
+    uint256 private constant BOOKING_JITTER = 30;
 
     /// @notice Shortest and longest gap between scheduled rebalances. Hedera refuses expiries past 62 days.
     uint256 public constant MIN_INTERVAL = 60;
@@ -57,6 +65,8 @@ contract BasketVault is Ownable, ReentrancyGuard {
     uint256 public constant MIN_SCHEDULED_GAS = 3_000_000;
 
     ISaucerSwapV2Router public immutable router;
+    /// @notice The SaucerSwap V2 factory every leg's pool was checked against at deployment.
+    ISaucerSwapV2Factory public immutable factory;
     IWhbarHelper public immutable whbarHelper;
     address public immutable whbar;
     AggregatorV3Interface public immutable hbarUsdFeed;
@@ -66,6 +76,9 @@ contract BasketVault is Ownable, ReentrancyGuard {
     uint256 public immutable driftBps;
     /// @notice Most a swap may return below the pre-trade spot price, in basis points.
     uint256 public immutable slippageBps;
+    /// @notice Most one rebalance swap may move, in basis points of NAV per leg per call. A leg further from its
+    /// target than this converges over several runs instead of reverting on a trade the pool cannot fill.
+    uint256 public immutable maxTradeBps;
     /// @notice Gas each scheduled rebalance is booked with.
     uint256 public immutable scheduledGas;
     /// @notice Index into `legs` of a USD stablecoin leg checked against Chainlink, or type(uint256).max for none.
@@ -94,6 +107,10 @@ contract BasketVault is Ownable, ReentrancyGuard {
     event Rebalanced(uint256 navBefore, uint256 navAfter, bool traded);
     event AutomationStarted(uint256 interval);
     event AutomationStopped();
+    /// @notice The result of deleting the pending schedule when automation stopped. 22 is success; 201, 212 and 213
+    /// mean the schedule had already run, expired or been deleted.
+    event ScheduleDeleted(address indexed schedule, int64 responseCode);
+    event LegsSkipped(address indexed account, uint256 skipLegsMask);
     event RunBooked(address indexed schedule, uint256 expiry);
     event BookingFailed(int64 responseCode);
     event ScheduledRun(bool traded);
@@ -110,18 +127,24 @@ contract BasketVault is Ownable, ReentrancyGuard {
     error HtsCallFailed(int64 responseCode);
     error TransferFailed(address token);
     error OnlySelf();
+    error OnlyOwnerOrSelf();
     error AutomationActive();
+    error NotAutomated();
+    error RunAlreadyPending(address schedule);
+    error BadSkipMask(uint256 skipLegsMask);
     error BadInterval(uint256 interval);
     error ScheduleFailed(int64 responseCode);
 
     struct Config {
         address router;
+        address factory;
         address whbarHelper;
         address whbar;
         address hbarUsdFeed;
         uint256 maxOracleAge;
         uint256 driftBps;
         uint256 slippageBps;
+        uint256 maxTradeBps;
         uint256 scheduledGas;
         uint256 guardLeg;
         uint256 maxDeviationBps;
@@ -135,13 +158,20 @@ contract BasketVault is Ownable, ReentrancyGuard {
 
     constructor(Config memory config, LegConfig[] memory legConfigs) Ownable(msg.sender) {
         if (
-            config.router == address(0) || config.whbarHelper == address(0) || config.whbar == address(0)
-                || config.hbarUsdFeed == address(0) || legConfigs.length == 0 || config.slippageBps >= BPS
-                || config.driftBps == 0 || config.driftBps >= BPS || config.scheduledGas < MIN_SCHEDULED_GAS
-                || (config.guardLeg != type(uint256).max && config.guardLeg >= legConfigs.length)
+            config.router == address(0) || config.factory == address(0) || config.whbarHelper == address(0)
+                || config.whbar == address(0) || config.hbarUsdFeed == address(0) || legConfigs.length == 0
+                || config.slippageBps == 0 || config.slippageBps >= BPS || config.driftBps == 0
+                || config.driftBps >= BPS || config.maxTradeBps == 0 || config.maxTradeBps > BPS
+                || config.maxOracleAge == 0 || config.scheduledGas < MIN_SCHEDULED_GAS
+                || (config.guardLeg != type(uint256).max
+                    && (config.guardLeg >= legConfigs.length
+                        || config.maxDeviationBps == 0
+                        || config.maxDeviationBps >= BPS)) || AggregatorV3Interface(config.hbarUsdFeed).decimals() != 8
         ) revert BadConfig();
 
         router = ISaucerSwapV2Router(config.router);
+        factory = ISaucerSwapV2Factory(config.factory);
+        maxTradeBps = config.maxTradeBps;
         whbarHelper = IWhbarHelper(config.whbarHelper);
         whbar = config.whbar;
         hbarUsdFeed = AggregatorV3Interface(config.hbarUsdFeed);
@@ -155,6 +185,16 @@ contract BasketVault is Ownable, ReentrancyGuard {
         uint256 legWeights;
         for (uint256 i; i < legConfigs.length; ++i) {
             ISaucerSwapV2Pool pool = ISaucerSwapV2Pool(legConfigs[i].pool);
+            // A leg's pool must be the factory's own pool for the pair and fee, or the vault would price its
+            // holdings from a contract the deployer controls while the router trades somewhere else.
+            for (uint256 j; j < i; ++j) {
+                if (legConfigs[j].token == legConfigs[i].token) revert BadConfig();
+            }
+            if (legConfigs[i].token == config.whbar) revert BadConfig();
+            if (
+                ISaucerSwapV2Factory(config.factory).getPool(legConfigs[i].token, config.whbar, pool.fee())
+                    != legConfigs[i].pool
+            ) revert BadConfig();
             address token0 = pool.token0();
             address token1 = pool.token1();
             bool tokenIsToken0 = token0 == legConfigs[i].token;
@@ -253,7 +293,26 @@ contract BasketVault is Ownable, ReentrancyGuard {
     /// @notice Burns `shares` and pays out the same fraction of every token the vault holds. Needs a share token
     /// allowance for the vault. Reads no price, so it works even when the oracle or a pool does not.
     function redeem(uint256 shares) external nonReentrant returns (uint256 whbarOut, uint256[] memory legAmounts) {
+        return _redeem(shares, 0);
+    }
+
+    /// @notice Like `redeem`, but bit i of `skipLegsMask` skips `legs()[i]`: that token is not paid out and the
+    /// redeemer's slice of it stays in the vault for the remaining holders. A token whose issuer froze the vault or
+    /// the redeemer would otherwise revert the whole payout and trap every other leg with it.
+    function redeemExcept(uint256 shares, uint256 skipLegsMask)
+        external
+        nonReentrant
+        returns (uint256 whbarOut, uint256[] memory legAmounts)
+    {
+        return _redeem(shares, skipLegsMask);
+    }
+
+    function _redeem(uint256 shares, uint256 skipLegsMask)
+        private
+        returns (uint256 whbarOut, uint256[] memory legAmounts)
+    {
         if (shares == 0) revert ZeroAmount();
+        if (skipLegsMask >> _legs.length != 0) revert BadSkipMask(skipLegsMask);
         address share = shareToken;
         if (share == address(0)) revert NotInitialized();
         uint256 supply = IERC20(share).totalSupply();
@@ -265,23 +324,29 @@ contract BasketVault is Ownable, ReentrancyGuard {
         if (whbarOut > 0) _transfer(whbar, msg.sender, whbarOut);
         legAmounts = new uint256[](_legs.length);
         for (uint256 i; i < _legs.length; ++i) {
+            if (skipLegsMask & (uint256(1) << i) != 0) continue;
             address token = _legs[i].token;
             uint256 out = IERC20(token).balanceOf(address(this)) * shares / supply;
             legAmounts[i] = out;
             if (out > 0) _transfer(token, msg.sender, out);
         }
+        if (skipLegsMask != 0) emit LegsSkipped(msg.sender, skipLegsMask);
         emit Redeemed(msg.sender, shares, whbarOut, legAmounts);
     }
 
     // ---------------------------------------------------------------- rebalance
 
-    /// @notice Trades every leg that has drifted more than `driftBps` back to its target weight. Anyone may call
-    /// it; it only ever moves the basket toward its targets. Returns false when nothing had drifted.
+    /// @notice Trades every leg that has drifted more than `driftBps` back toward its target weight, at most
+    /// `maxTradeBps` of NAV per swap. Returns false when nothing had drifted. Only the owner and the vault's own
+    /// scheduled run may call it: sizing and slippage come from pool spot prices, so an outsider who could call it
+    /// could move a price earlier in the same transaction, let the vault trade against it and trade back.
     function rebalance() public nonReentrant returns (bool traded) {
+        if (msg.sender != address(this) && msg.sender != owner()) revert OnlyOwnerOrSelf();
         _checkPriceGuard();
         uint160[] memory prices = _spotPrices();
         uint256 navBefore = _nav(prices);
         uint256 band = navBefore * driftBps / BPS;
+        uint256 maxTrade = navBefore * maxTradeBps / BPS;
 
         // Sell overweight legs first so the buys below have the WHBAR to spend.
         uint256[] memory values = new uint256[](_legs.length);
@@ -292,7 +357,7 @@ contract BasketVault is Ownable, ReentrancyGuard {
             uint256 target = navBefore * leg.weightBps / BPS;
             values[i] = value;
             if (value > target + band) {
-                uint256 excess = value - target;
+                uint256 excess = Math.min(value - target, maxTrade);
                 uint256 amountIn = balance * excess / value;
                 _swap(leg.token, whbar, leg.fee, amountIn, excess * (BPS - slippageBps) / BPS);
                 traded = true;
@@ -302,7 +367,7 @@ contract BasketVault is Ownable, ReentrancyGuard {
             Leg memory leg = _legs[i];
             uint256 target = navBefore * leg.weightBps / BPS;
             if (values[i] + band < target) {
-                uint256 spend = Math.min(target - values[i], IERC20(whbar).balanceOf(address(this)));
+                uint256 spend = Math.min(Math.min(target - values[i], maxTrade), IERC20(whbar).balanceOf(address(this)));
                 if (spend == 0) continue;
                 uint256 minOut = _whbarToLeg(leg, prices[i], spend) * (BPS - slippageBps) / BPS;
                 _swap(whbar, leg.token, leg.fee, spend, minOut);
@@ -332,7 +397,7 @@ contract BasketVault is Ownable, ReentrancyGuard {
         address pending = pendingSchedule;
         pendingSchedule = address(0);
         nextRunAt = 0;
-        if (pending != address(0)) HSS.deleteSchedule(pending);
+        if (pending != address(0)) emit ScheduleDeleted(pending, HSS.deleteSchedule(pending));
         emit AutomationStopped();
     }
 
@@ -345,13 +410,23 @@ contract BasketVault is Ownable, ReentrancyGuard {
         pendingSchedule = address(0);
         nextRunAt = 0;
         if (rebalanceInterval == 0) return;
-        // A lost booking ends the chain, so say so on chain: automation reads as off and can be restarted.
-        if (_bookNext() != SUCCESS) rebalanceInterval = 0;
+        // A lost booking (BookingFailed) leaves the interval alone: anyone can call `rearm`, so an attacker who
+        // fills the probed seconds cannot switch automation off.
+        _bookNext();
         try this.rebalance() returns (bool traded) {
             emit ScheduledRun(traded);
         } catch (bytes memory reason) {
             emit ScheduledRunFailed(reason);
         }
+    }
+
+    /// @notice Books the next run when automation is on but no run is pending, which is what a lost booking leaves
+    /// behind. Anyone may call it; the vault's fuel pays and the booking is the same one `runScheduled` makes.
+    function rearm() external {
+        if (rebalanceInterval == 0) revert NotAutomated();
+        if (pendingSchedule != address(0)) revert RunAlreadyPending(pendingSchedule);
+        int64 rc = _bookNext();
+        if (rc != SUCCESS) revert ScheduleFailed(rc);
     }
 
     /// @notice Sends native HBAR fuel out of the vault. Basket tokens are not reachable from here.
@@ -386,6 +461,7 @@ contract BasketVault is Ownable, ReentrancyGuard {
     function hbarUsd() public view returns (uint256) {
         (, int256 answer,, uint256 updatedAt,) = hbarUsdFeed.latestRoundData();
         if (answer <= 0) revert BadOraclePrice(answer);
+        // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp > updatedAt + maxOracleAge) revert StaleOracle(updatedAt);
         // forge-lint: disable-next-line(unsafe-typecast)
         return uint256(answer);
@@ -407,7 +483,7 @@ contract BasketVault is Ownable, ReentrancyGuard {
     // ---------------------------------------------------------------- internals
 
     function _bookNext() private returns (int64 rc) {
-        uint256 expiry = _secondWithCapacity(block.timestamp + rebalanceInterval);
+        uint256 expiry = _secondWithCapacity(block.timestamp + rebalanceInterval + _bookingJitter());
         address schedule;
         (rc, schedule) = HSS.scheduleCall(address(this), expiry, scheduledGas, 0, abi.encodeCall(this.runScheduled, ()));
         if (rc != SUCCESS) {
@@ -417,6 +493,10 @@ contract BasketVault is Ownable, ReentrancyGuard {
         pendingSchedule = schedule;
         nextRunAt = expiry;
         emit RunBooked(schedule, expiry);
+    }
+
+    function _bookingJitter() private view returns (uint256) {
+        return uint256(keccak256(abi.encode(blockhash(block.number - 1), block.prevrandao))) % BOOKING_JITTER;
     }
 
     /// HIP-1215's probe for a busy second. If none has capacity, scheduleCall reports SCHEDULE_EXPIRY_IS_BUSY.

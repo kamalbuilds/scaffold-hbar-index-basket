@@ -32,8 +32,7 @@ contract BasketVaultRebalanceTest is BasketVaultBase {
         uint256 sauceBal = sauce.balanceOf(address(vault));
         uint256 whbarBal = whbar.balanceOf(address(vault));
 
-        vm.prank(keeper);
-        assertFalse(vault.rebalance());
+        assertFalse(_rebalance());
 
         assertEq(router.swapCount(), swaps, "no trade");
         assertEq(sauce.balanceOf(address(vault)), sauceBal);
@@ -47,7 +46,7 @@ contract BasketVaultRebalanceTest is BasketVaultBase {
         assertLt(w[1], 3000 + DRIFT_BPS, "but not past the band");
 
         uint256 swaps = router.swapCount();
-        assertFalse(vault.rebalance());
+        assertFalse(_rebalance());
         assertEq(router.swapCount(), swaps);
     }
 
@@ -56,6 +55,7 @@ contract BasketVaultRebalanceTest is BasketVaultBase {
         vm.deal(owner, INIT_VALUE);
         vm.prank(owner);
         empty.initialize{ value: INIT_VALUE }("Empty", "EMP");
+        vm.prank(owner);
         assertFalse(empty.rebalance());
     }
 
@@ -68,8 +68,7 @@ contract BasketVaultRebalanceTest is BasketVaultBase {
         uint256 usdcBefore = usdc.balanceOf(address(vault));
 
         vm.recordLogs();
-        vm.prank(keeper);
-        bool traded = vault.rebalance();
+        bool traded = _rebalance();
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         assertTrue(traded);
@@ -108,7 +107,9 @@ contract BasketVaultRebalanceTest is BasketVaultBase {
         BasketVault.LegConfig[] memory legs = _legs();
         legs[0].weightBps = 4900;
         legs[1].weightBps = 4900;
-        vault = _deployVault(_config(), legs);
+        BasketVault.Config memory config = _config();
+        config.maxTradeBps = 10_000; // the cap has its own tests; this one is about where the WHBAR comes from
+        vault = _deployVault(config, legs);
         _initialize();
         _fund(alice);
         _deposit(alice, D1);
@@ -118,25 +119,40 @@ contract BasketVaultRebalanceTest is BasketVaultBase {
         uint256 deficit = vault.nav() * 4900 / 10_000 - rows[2].valueWhbar;
         assertGt(deficit, whbar.balanceOf(address(vault)) * 5, "the WHBAR on hand is nowhere near the USDC deficit");
 
-        assertTrue(vault.rebalance());
+        assertTrue(_rebalance());
         uint256[3] memory w = _weightsBps();
         assertApproxEqAbs(w[1], 4900, DRIFT_BPS);
         assertApproxEqAbs(w[2], 4900, DRIFT_BPS);
         assertApproxEqAbs(w[0], 200, DRIFT_BPS);
     }
 
-    function test_rebalance_isPermissionless() public {
+    function test_rebalance_isOwnerOrSelfOnly() public {
         _scaleSaucePrice(2, 1);
-        vm.prank(makeAddr("stranger"));
-        assertTrue(vault.rebalance());
+        uint256 swaps = router.swapCount();
+        address[3] memory outsiders = [makeAddr("stranger"), keeper, alice];
+        for (uint256 i; i < outsiders.length; ++i) {
+            vm.prank(outsiders[i]);
+            vm.expectRevert(BasketVault.OnlyOwnerOrSelf.selector);
+            vault.rebalance();
+        }
+        assertEq(router.swapCount(), swaps, "no outsider moved the vault");
+
+        vm.prank(address(vault));
+        assertTrue(vault.rebalance(), "the vault's own scheduled run may");
+        _assertInBand();
+    }
+
+    function test_rebalance_ownerMayCallItDirectly() public {
+        _scaleSaucePrice(2, 1);
+        assertTrue(_rebalance());
         _assertInBand();
     }
 
     function test_rebalance_afterItTradesTheNextCallIsANoOp() public {
         _scaleSaucePrice(2, 1);
-        assertTrue(vault.rebalance());
+        assertTrue(_rebalance());
         uint256 swaps = router.swapCount();
-        assertFalse(vault.rebalance());
+        assertFalse(_rebalance());
         assertEq(router.swapCount(), swaps);
     }
 
@@ -145,7 +161,7 @@ contract BasketVaultRebalanceTest is BasketVaultBase {
         uint256[3] memory before = _weightsBps();
         assertLt(before[1], 3000 - DRIFT_BPS);
         uint256 sauceBefore = sauce.balanceOf(address(vault));
-        assertTrue(vault.rebalance());
+        assertTrue(_rebalance());
         assertGt(sauce.balanceOf(address(vault)), sauceBefore, "SAUCE was bought back up to weight");
         _assertInBand();
     }
@@ -155,14 +171,14 @@ contract BasketVaultRebalanceTest is BasketVaultBase {
         router.setHaircutBps(100);
         uint256 sauceBefore = sauce.balanceOf(address(vault));
         vm.expectRevert(bytes("Too little received"));
-        vault.rebalance();
+        _rebalance();
         assertEq(sauce.balanceOf(address(vault)), sauceBefore, "nothing was sold");
     }
 
     function test_rebalance_passesMinOutBelowTheExcessItSells() public {
         _scaleSaucePrice(2, 1);
         vm.recordLogs();
-        vault.rebalance();
+        _rebalance();
         Vm.Log[] memory logs = vm.getRecordedLogs();
         uint256 first = _indexOf(logs, BasketVault.Swapped.selector);
         (uint256 amountIn, uint256 amountOut) = abi.decode(logs[first].data, (uint256, uint256));
@@ -177,7 +193,7 @@ contract BasketVaultRebalanceTest is BasketVaultBase {
         assertEq(sauce.approveCount(), 0);
         _scaleSaucePrice(2, 1);
         uint256 supplyBefore = sauce.totalSupply();
-        vault.rebalance();
+        _rebalance();
         assertEq(sauce.approveCount(), 1);
         assertEq(sauce.lastApproveValue(), supplyBefore, "approves the total supply, which HTS accepts for any cap");
         assertGt(sauce.allowance(address(vault), address(router)), 0, "and the rest stays for the next sale");
@@ -187,7 +203,7 @@ contract BasketVaultRebalanceTest is BasketVaultBase {
         _scaleSaucePrice(2, 1);
         vm.warp(T0 + MAX_ORACLE_AGE + 1);
         vm.expectRevert(abi.encodeWithSelector(BasketVault.StaleOracle.selector, T0));
-        vault.rebalance();
+        _rebalance();
     }
 }
 
@@ -250,10 +266,10 @@ contract BasketVaultGuardTest is BasketVaultBase {
         _scaleSaucePrice(2, 1);
         _scaleUsdcPrice(8, 10);
         vm.expectPartialRevert(BasketVault.PoolPriceDeviates.selector);
-        vault.rebalance();
+        _rebalance();
 
         _scaleUsdcPrice(1, 1);
-        assertTrue(vault.rebalance());
+        assertTrue(_rebalance());
     }
 
     function test_guard_aMoveInTheNonGuardLegDoesNotTripIt() public {
