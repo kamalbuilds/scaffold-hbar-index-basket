@@ -23,6 +23,9 @@ SAUCE=0x0000000000000000000000000000000000120f46
 USDC=0x0000000000000000000000000000000000001549
 ME=$(cast wallet address --private-key "$DEPLOYER_PRIVATE_KEY")
 
+# cast prints "123 [1.23e2]"; keep the exact value.
+num() { cast call "$@" --rpc-url "$RPC" | awk '{print $1}'; }
+
 send() {
   local label=$1
   shift
@@ -52,6 +55,7 @@ associate() {
 echo "Deployer $ME, $(cast balance "$ME" --rpc-url "$RPC" --ether) HBAR"
 
 if [ -z "${VAULT:-}" ]; then
+  mkdir -p deployments
   forge script script/Deploy.s.sol --rpc-url "$RPC" --private-key "$DEPLOYER_PRIVATE_KEY" --broadcast --slow --legacy >/dev/null
   node scripts-js/generateTsAbis.js >/dev/null
   VAULT=$(jq -r '[to_entries[] | select(.value == "BasketVault") | .key] | last' deployments/296.json)
@@ -70,18 +74,18 @@ echo "NAV $(cast call "$VAULT" "nav()(uint256)" --rpc-url "$RPC") tinybar, $(cas
 
 send "rebalance" "$VAULT" "rebalance()" --gas-limit 4000000
 
-if [ "$(cast call "$VAULT" "rebalanceInterval()(uint256)" --rpc-url "$RPC")" = 0 ]; then
+if [ "$(num "$VAULT" "rebalanceInterval()(uint256)")" = 0 ]; then
   send "fuel 10 HBAR" "$VAULT" --value 10ether --gas-limit 100000
   send "startAutomation ${INTERVAL}s" "$VAULT" "startAutomation(uint256)" "$INTERVAL" --gas-limit 3000000
 fi
-NEXT=$(cast call "$VAULT" "nextRunAt()(uint256)" --rpc-url "$RPC")
-echo "Next run booked for $NEXT ($(date -r "$NEXT" 2>/dev/null || date -d "@$NEXT")), schedule $(cast call "$VAULT" "pendingSchedule()(address)" --rpc-url "$RPC")"
+NEXT=$(num "$VAULT" "nextRunAt()(uint256)")
+echo "Next run booked for $NEXT, schedule $(cast call "$VAULT" "pendingSchedule()(address)" --rpc-url "$RPC")"
 
 echo "Waiting for the network to run it..."
 deadline=$((NEXT + 120))
 while [ "$(date +%s)" -lt "$deadline" ]; do
   sleep 15
-  now=$(cast call "$VAULT" "nextRunAt()(uint256)" --rpc-url "$RPC")
+  now=$(num "$VAULT" "nextRunAt()(uint256)")
   if [ "$now" != "$NEXT" ]; then
     echo "Scheduled run executed; successor booked for $now"
     curl -s "$MIRROR/contracts/$VAULT/results?order=desc&limit=3" |
@@ -89,7 +93,7 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
     break
   fi
 done
-[ "$(cast call "$VAULT" "nextRunAt()(uint256)" --rpc-url "$RPC")" != "$NEXT" ] || {
+[ "$(num "$VAULT" "nextRunAt()(uint256)")" != "$NEXT" ] || {
   echo "FAILED: no scheduled run by $deadline"
   exit 1
 }
@@ -97,7 +101,7 @@ done
 associate WHBAR "$WHBAR"
 associate SAUCE "$SAUCE"
 associate USDC "$USDC"
-SHARES=$(cast call "$SHARE" "balanceOf(address)(uint256)" "$ME" --rpc-url "$RPC" | awk '{print $1}')
+SHARES=$(num "$SHARE" "balanceOf(address)(uint256)" "$ME")
 HALF=$((SHARES / 2))
 send "approve shares" "$SHARE" "approve(address,uint256)" "$VAULT" "$HALF" --gas-limit 1000000
 send "redeem $HALF shares" "$VAULT" "redeem(uint256)" "$HALF" --gas-limit 3000000
