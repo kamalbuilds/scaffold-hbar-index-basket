@@ -44,6 +44,8 @@ contract BasketVault is Ownable, ReentrancyGuard {
     uint256 private constant BPS = 10_000;
     uint256 private constant Q96 = 2 ** 96;
     uint8 private constant SHARE_DECIMALS = 8;
+    /// @notice Shares the first deposit locks in the vault's treasury, as a share-inflation defence.
+    uint256 public constant DEAD_SHARES = 1e5;
     /// Seconds past the ideal expiry to probe for a free slot: 1, 2, 4, 8, 16.
     uint256 private constant MAX_CAPACITY_DELAY = 16;
 
@@ -236,9 +238,12 @@ contract BasketVault is Ownable, ReentrancyGuard {
             valueAdded = valueAdded - spend + _legToWhbar(leg, prices[i], bought);
         }
 
-        shares = supply == 0 ? valueAdded : valueAdded * supply / navBefore;
+        // The first deposit leaves DEAD_SHARES in the treasury for good, so nobody can own the whole supply and
+        // inflate the share price by donating tokens to the vault.
+        uint256 minted = supply == 0 ? valueAdded : valueAdded * supply / navBefore;
+        shares = supply == 0 ? minted - Math.min(minted, DEAD_SHARES) : minted;
         if (shares == 0 || shares < minShares) revert InsufficientShares(shares, minShares);
-        _mintShares(shares);
+        _mintShares(minted);
         _transfer(shareToken, msg.sender, shares);
         emit Deposited(msg.sender, msg.value, valueAdded, shares);
     }
@@ -468,8 +473,13 @@ contract BasketVault is Ownable, ReentrancyGuard {
         private
         returns (uint256 amountOut)
     {
-        // An exact allowance per swap: HTS refuses allowances above a finite token's max supply.
-        if (!IERC20(tokenIn).approve(address(router), amountIn)) revert TransferFailed(tokenIn);
+        // An HTS approval from a contract costs about 700k gas, so approve rarely. The allowance is the token's
+        // total supply: HTS refuses one above a finite token's max supply, and total supply never exceeds it.
+        if (IERC20(tokenIn).allowance(address(this), address(router)) < amountIn) {
+            if (!IERC20(tokenIn).approve(address(router), IERC20(tokenIn).totalSupply())) {
+                revert TransferFailed(tokenIn);
+            }
+        }
         amountOut = router.exactInput(
             ISaucerSwapV2Router.ExactInputParams({
                 path: abi.encodePacked(tokenIn, fee, tokenOut),
