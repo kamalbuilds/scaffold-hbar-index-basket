@@ -203,7 +203,9 @@ contract BasketVault is Ownable, ReentrancyGuard {
             maxSupply: 0,
             freezeDefault: false,
             tokenKeys: keys,
-            expiry: IHederaTokenService.Expiry({ second: 0, autoRenewAccount: address(this), autoRenewPeriod: 7_890_000 })
+            expiry: IHederaTokenService.Expiry({
+                second: 0, autoRenewAccount: address(this), autoRenewPeriod: 7_890_000
+            })
         });
         (int64 rc, address created) =
             HTS.createFungibleToken{ value: msg.value }(token, 0, int32(uint32(SHARE_DECIMALS)));
@@ -253,6 +255,7 @@ contract BasketVault is Ownable, ReentrancyGuard {
     function redeem(uint256 shares) external nonReentrant returns (uint256 whbarOut, uint256[] memory legAmounts) {
         if (shares == 0) revert ZeroAmount();
         address share = shareToken;
+        if (share == address(0)) revert NotInitialized();
         uint256 supply = IERC20(share).totalSupply();
         if (!IERC20(share).transferFrom(msg.sender, address(this), shares)) revert TransferFailed(share);
         (int64 rc,) = HTS.burnToken(share, _int64(shares), new int64[](0));
@@ -342,7 +345,8 @@ contract BasketVault is Ownable, ReentrancyGuard {
         pendingSchedule = address(0);
         nextRunAt = 0;
         if (rebalanceInterval == 0) return;
-        _bookNext();
+        // A lost booking ends the chain, so say so on chain: automation reads as off and can be restarted.
+        if (_bookNext() != SUCCESS) rebalanceInterval = 0;
         try this.rebalance() returns (bool traded) {
             emit ScheduledRun(traded);
         } catch (bytes memory reason) {
