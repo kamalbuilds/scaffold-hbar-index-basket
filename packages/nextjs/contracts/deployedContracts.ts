@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-hbar/contract";
 const deployedContracts = {
   296: {
     BasketVault: {
-      address: "0x1af34177be9371490e96ce5420c71d8d95c97eab",
+      address: "0xe72fbf68536d29d3a9e0d897c2ae813b7b279058",
       abi: [
         {
           type: "constructor",
@@ -19,6 +19,11 @@ const deployedContracts = {
               components: [
                 {
                   name: "router",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "factory",
                   type: "address",
                   internalType: "address",
                 },
@@ -49,6 +54,11 @@ const deployedContracts = {
                 },
                 {
                   name: "slippageBps",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "maxTradeBps",
                   type: "uint256",
                   internalType: "uint256",
                 },
@@ -178,6 +188,19 @@ const deployedContracts = {
               name: "",
               type: "uint256",
               internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "factory",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract ISaucerSwapV2Factory",
             },
           ],
           stateMutability: "view",
@@ -342,6 +365,19 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "maxTradeBps",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "nav",
           inputs: [],
           outputs: [
@@ -407,6 +443,13 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "rearm",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "rebalance",
           inputs: [],
           outputs: [
@@ -437,6 +480,35 @@ const deployedContracts = {
           inputs: [
             {
               name: "shares",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "whbarOut",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "legAmounts",
+              type: "uint256[]",
+              internalType: "uint256[]",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "redeemExcept",
+          inputs: [
+            {
+              name: "shares",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "skipLegsMask",
               type: "uint256",
               internalType: "uint256",
             },
@@ -702,6 +774,25 @@ const deployedContracts = {
         },
         {
           type: "event",
+          name: "LegsSkipped",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "skipLegsMask",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "OwnershipTransferred",
           inputs: [
             {
@@ -790,6 +881,25 @@ const deployedContracts = {
               type: "uint256",
               indexed: false,
               internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "ScheduleDeleted",
+          inputs: [
+            {
+              name: "schedule",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "responseCode",
+              type: "int64",
+              indexed: false,
+              internalType: "int64",
             },
           ],
           anonymous: false,
@@ -890,6 +1000,17 @@ const deployedContracts = {
         },
         {
           type: "error",
+          name: "BadSkipMask",
+          inputs: [
+            {
+              name: "skipLegsMask",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+        },
+        {
+          type: "error",
           name: "HtsCallFailed",
           inputs: [
             {
@@ -917,7 +1038,17 @@ const deployedContracts = {
         },
         {
           type: "error",
+          name: "NotAutomated",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "NotInitialized",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "OnlyOwnerOrSelf",
           inputs: [],
         },
         {
@@ -967,6 +1098,17 @@ const deployedContracts = {
           type: "error",
           name: "ReentrancyGuardReentrantCall",
           inputs: [],
+        },
+        {
+          type: "error",
+          name: "RunAlreadyPending",
+          inputs: [
+            {
+              name: "schedule",
+              type: "address",
+              internalType: "address",
+            },
+          ],
         },
         {
           type: "error",
@@ -1035,7 +1177,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 41293014,
+      deployedOnBlock: 41298976,
     },
   },
 } as const;
