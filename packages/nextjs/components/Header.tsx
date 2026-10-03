@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useRef } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bars3Icon, BugAntIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { Mark } from "~~/components/basket/Mark";
 import { RainbowKitCustomConnectButton } from "~~/components/scaffold-hbar";
 import { useOutsideClick } from "~~/hooks/scaffold-hbar";
 
@@ -16,7 +16,7 @@ type HeaderMenuLink = {
 
 export const menuLinks: HeaderMenuLink[] = [
   {
-    label: "Home",
+    label: "Fund",
     href: "/",
   },
   {
@@ -37,15 +37,16 @@ export const HeaderMenuLinks = () => {
   return (
     <>
       {menuLinks.map(({ label, href, icon }) => {
-        const isActive = pathname === href;
+        const isActive = href === "/" ? pathname === href : pathname.startsWith(href);
         return (
           <li key={href}>
             <Link
               href={href}
               passHref
+              aria-current={isActive ? "page" : undefined}
               className={`${
                 isActive ? "bg-primary/10 text-primary font-semibold" : "hover:bg-primary/5"
-              } py-1.5 px-3 text-sm rounded-full gap-2 grid grid-flow-col transition-colors`}
+              } py-1.5 px-3 text-sm rounded-lg gap-2 grid grid-flow-col transition-colors`}
             >
               {icon}
               <span>{label}</span>
@@ -67,14 +68,14 @@ export const Header = () => {
   });
 
   return (
-    <div className="sticky lg:static top-0 navbar bg-base-100 min-h-0 shrink-0 justify-between z-20 shadow-sm border-b border-base-300 px-0 sm:px-2">
+    <div className="sticky lg:static top-0 navbar bg-base-100 min-h-0 shrink-0 justify-between z-20 border-b border-base-300 px-0 sm:px-2">
       <div className="navbar-start w-auto lg:w-1/2">
         <details className="dropdown" ref={burgerMenuRef}>
-          <summary className="ml-1 btn btn-ghost lg:hidden hover:bg-transparent">
+          <summary className="ml-1 btn btn-ghost lg:hidden hover:bg-transparent" aria-label="Open menu">
             <Bars3Icon className="h-1/2" />
           </summary>
           <ul
-            className="menu menu-compact dropdown-content mt-3 p-2 shadow-sm bg-base-100 rounded-box w-52"
+            className="menu menu-compact dropdown-content mt-3 p-2 border border-base-300 bg-base-100 rounded-box w-52"
             onClick={() => {
               burgerMenuRef?.current?.removeAttribute("open");
             }}
@@ -83,16 +84,8 @@ export const Header = () => {
           </ul>
         </details>
         <Link href="/" passHref className="hidden lg:flex items-center gap-3 ml-4 mr-6 shrink-0">
-          <div className="flex relative w-9 h-9">
-            <Image alt="Hedera icon" className="cursor-pointer dark:hidden" fill src="/Hedera-Icon-Dark.svg" />
-            <Image alt="Hedera icon" className="cursor-pointer hidden dark:block" fill src="/Hedera-Icon-White.svg" />
-          </div>
-          <div className="flex flex-col">
-            <span className="font-bold leading-tight text-base">Scaffold-HBAR</span>
-            <span className="text-[10px] tracking-wider uppercase text-base-content/50 font-medium">
-              Built on Hedera
-            </span>
-          </div>
+          <Mark className="h-8 w-8" />
+          <span className="font-semibold leading-tight text-base tracking-tight">Index Basket</span>
         </Link>
         <ul className="hidden lg:flex lg:flex-nowrap menu menu-horizontal px-1 gap-2">
           <HeaderMenuLinks />
