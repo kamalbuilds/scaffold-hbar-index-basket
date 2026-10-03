@@ -26,7 +26,7 @@ contract DeployScript is ScaffoldETHDeploy {
         BasketVault vault = new BasketVault(
             BasketVault.Config({
                 router: 0x0000000000000000000000000000000000159398, // SwapRouter 0.0.1414040
-                factory: 0x00000000000000000000000000000000001243eE, // SaucerSwapV2Factory 0.0.1192942
+                factory: 0x00000000000000000000000000000000001243eE, // SaucerSwapV2Factory 0.0.1197038
                 whbarHelper: 0x000000000000000000000000000000000050a8a7, // WhbarHelper 0.0.5286055
                 whbar: 0x0000000000000000000000000000000000003aD2, // WHBAR 0.0.15058
                 hbarUsdFeed: 0x59bC155EB6c6C415fE43255aF66EcF0523c92B4a, // Chainlink HBAR/USD
