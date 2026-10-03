@@ -1,6 +1,6 @@
 # Index Basket
 
-A tokenised index fund on Hedera, as a [Scaffold-HBAR](https://docs.hedera.com/solutions/tools/scaffold-hbar/index) template. One HBAR deposit into `BasketVault` buys a 40% WHBAR / 30% SAUCE / 30% USDC basket on SaucerSwap V2 in a single transaction and mints an HTS share token (IBSK) for your slice. Redeeming burns shares and pays out your slice of every token in kind. The vault rebalances itself on a timer it books with the Hedera Schedule Service, so no keeper bot, server or hot key exists anywhere. Chainlink HBAR/USD prices the fund in dollars and gates every deposit and rebalance on a fresh oracle answer.
+A tokenised index fund on Hedera, as a [Scaffold-HBAR](https://docs.hedera.com/solutions/tools/scaffold-hbar/index) template. One HBAR deposit into `BasketVault` buys a 40% WHBAR / 30% SAUCE / 30% USDC basket on SaucerSwap V2 in a single transaction and mints an HTS share token (IBSK) for your slice. Redeeming burns shares and pays out your slice of every token in kind. The vault rebalances itself on a timer it books with the Hedera Schedule Service, so no keeper bot, server or hot key exists anywhere. Chainlink HBAR/USD prices the fund in dollars and gates every deposit and rebalance on a fresh oracle answer. `rebalance()` belongs to the owner and to the vault's own scheduled run, so no outside caller can sandwich a rebalance.
 
 ```bash
 npm create scaffold-hbar@latest -- --template kamalbuilds/scaffold-hbar-index-basket
@@ -8,7 +8,7 @@ npm create scaffold-hbar@latest -- --template kamalbuilds/scaffold-hbar-index-ba
 
 The `--` matters with `npm create`: without it npm keeps `--template` for itself. `npx create-scaffold-hbar@latest --template kamalbuilds/scaffold-hbar-index-basket` is equivalent.
 
-What a reader gets from the scaffold: one Solidity contract that is the whole protocol, 110 Foundry tests that need no network, a Next.js fund page (live NAV, target against actual weights, deposit, redeem, automation runway), a script that runs every flow on testnet and prints a HashScan link per transaction, and [AGENTS.md](AGENTS.md) for coding agents.
+What a reader gets from the scaffold: one Solidity contract that is the whole protocol, 148 Foundry tests that need no network, a Next.js fund page (live NAV, target against actual weights, deposit, redeem, automation runway), a script that runs every flow on testnet and prints a HashScan link per transaction, and [AGENTS.md](AGENTS.md) for coding agents.
 
 ## Why it needs SaucerSwap, Chainlink, HTS and HSS
 
@@ -126,83 +126,88 @@ The first deposit mints `valueAdded` shares and locks `DEAD_SHARES` (1e5 base un
 
 `redeem(shares)` pulls the shares with `transferFrom` (so the holder first approves the vault on IBSK), burns them with `burnToken`, and sends `balance * shares / supply` of WHBAR, SAUCE and USDC. It never touches the oracle or a pool, so a stale Chainlink feed or a broken pool cannot trap a holder. A test proves redeem succeeds while deposit reverts on a stale feed. The recipient must be associated with the three basket tokens, and the UI lists the missing associations as steps before the button.
 
-### Rebalance: permissionless, sell then buy
+`redeemExcept(shares, skipLegsMask)` is the exit for a leg whose HTS token is frozen or paused: bit `i` of the mask skips `legs()[i]`, that token is not paid, and the holder's slice of it stays in the vault for the remaining holders. `LegsSkipped` records the choice, and the WHBAR leg is always paid.
 
-`rebalance()` can be called by anyone and can only move the basket toward its targets. With `band = NAV * driftBps / 10_000` it first sells every leg worth more than `target + band` down to its target, so the WHBAR for the buys exists, then buys every leg worth less than `target - band` with at most the WHBAR the vault holds. If no leg is outside the band it trades nothing and returns `false`. Every swap carries the same spot-derived slippage floor as a deposit.
+### Rebalance: owner or the vault's own run, sell then buy
+
+`rebalance()` can be called by the owner and by the vault's scheduled run, and it can only move the basket toward its targets. Sizing and the slippage floor come from pool spot prices, so a caller outside that set could move a pool earlier in the same transaction, let the vault trade against the moved price and trade back; the gate closes that path. The regression test `test_regression_outsiderCannotProfitFromRebalance` shows 524 HBAR of attacker profit on a 200,000 HBAR vault without the gate and every sandwich reverting with `OnlyOwnerOrSelf` with it. With `band = NAV * driftBps / 10_000` it first sells every leg worth more than `target + band` down to its target, so the WHBAR for the buys exists, then buys every leg worth less than `target - band` with at most the WHBAR the vault holds. Each swap moves at most `maxTradeBps` of NAV (2000, 20%), so a large drift converges over several runs. If no leg is outside the band it trades nothing and returns `false`. Every swap carries the same spot-derived slippage floor as a deposit.
 
 ### Automation: books the successor first, never reverts
 
-`startAutomation(interval)` (owner, 60 seconds to 60 days) calls HSS `scheduleCall` on the vault itself. `_secondWithCapacity` asks `hasScheduleCapacity` for the ideal second and probes +1, +2, +4, +8 and +16 seconds when it is busy. At the expiry Hedera calls `runScheduled` with the vault as `msg.sender`, which is its only access check. `runScheduled` then:
+`startAutomation(interval)` (owner, 60 seconds to 60 days) calls HSS `scheduleCall` on the vault itself. The ideal second is the interval plus a jitter of 0 to 29 seconds drawn from `blockhash` and `prevrandao`, so nobody can fill the seconds a run will ask for in advance. `_secondWithCapacity` asks `hasScheduleCapacity` for that second and probes +1, +2, +4, +8, +16, +32 and +64 seconds when it is busy. At the expiry Hedera calls `runScheduled` with the vault as `msg.sender`, which is its only access check. `runScheduled` then:
 
-1. clears the executed schedule and, if automation is on, books the next one before anything else, because Hedera allows one `scheduleCall` per scheduled execution and a lost booking ends the chain (a failed booking sets the interval to 0, so automation reads as off and can be restarted);
+1. clears the executed schedule and, if automation is on, books the next one before anything else, because Hedera allows one `scheduleCall` per scheduled execution and a lost booking ends the chain (a failed booking emits `BookingFailed` and keeps the interval, and anyone can call `rearm()` to book the next run, so filling the probed seconds cannot switch automation off);
 2. runs `rebalance()` inside `try/catch`, emitting `ScheduledRun(traded)` or `ScheduledRunFailed(reason)`, so a failing rebalance costs one run and never the loop.
 
 The booking gas is 4,000,000 and the contract refuses anything under `MIN_SCHEDULED_GAS` of 3,000,000: a self-rescheduling call below that runs once, fails to book its successor and still reports `SUCCESS`.
 
-Fuel is native HBAR sitting in the vault, separate from basket value. The payer must hold the full gas reservation, not just what a run burns: 4,000,000 gas times the gas price, about 3.52 HBAR. Runway in runs is `(fuel - reservation) / cost per run + 1`. The fund page computes it from the last run's measured cost. `withdrawFuel` moves native HBAR only, and `stopAutomation` deletes the pending schedule.
+Fuel is native HBAR sitting in the vault, separate from basket value. The payer must hold the full gas reservation, not just what a run burns: 4,000,000 gas times the gas price, about 3.52 HBAR. Runway in runs is `(fuel - reservation) / cost per run + 1`. The fund page computes it from the last run's measured cost. `withdrawFuel` moves native HBAR only, and `stopAutomation` deletes the pending schedule and emits `ScheduleDeleted(schedule, responseCode)`.
 
 ## Proven on Hedera testnet
 
-The app points at this vault: a 40% WHBAR / 30% SAUCE / 30% USDC basket with a 0.5% drift band (`DRIFT_BPS=50`) and a 6 hour interval.
+The app points at vault C: a 40% WHBAR / 30% SAUCE / 30% USDC basket with a 0.5% drift band (`DRIFT_BPS=50`) and a 6 hour interval. The full evidence, with a re-check command per row, is in [docs/testnet-evidence.md](docs/testnet-evidence.md).
 
 | What | Link |
 | --- | --- |
-| BasketVault | [0x1af34177Be9371490e96cE5420C71D8D95c97EaB](https://hashscan.io/testnet/contract/0x1af34177Be9371490e96cE5420C71D8D95c97EaB) |
-| Share token IBSK, created by the contract | [0.0.10837828](https://hashscan.io/testnet/token/0.0.10837828) |
+| BasketVault | [0xe72FbF68536D29d3A9e0D897C2aE813B7B279058](https://hashscan.io/testnet/contract/0xe72FbF68536D29d3A9e0D897C2aE813B7B279058) |
+| Share token IBSK, created by the contract | [0.0.10839906](https://hashscan.io/testnet/token/0.0.10839906) |
 
 ### Network-triggered rebalances that traded
 
-No person sent a transaction for either run. Hedera executed the vault's own schedule, and the payer was the vault. To give the vault something to correct, an outside account first swapped 150 WHBAR into USDC on the WHBAR/USDC pool, moving the pool tick from 39629 to 39970 (USDC +3.5%) ([swap](https://hashscan.io/testnet/transaction/0x05e4db83cdb523b4b46760697cf292029ea833fa6caea288e37d5c8fb55e7509)).
+No person sent a transaction for either run. Hedera executed the vault's own schedule (180 second interval plus booking jitter), and the payer was the vault. To give the vault something to correct, an outside account first swapped 150 WHBAR into USDC on the WHBAR/USDC pool, taking the USDC leg from 29.97% to 30.70% of NAV ([swap](https://hashscan.io/testnet/transaction/0x4a1cf5a8d2d9bb2bd1053d5a625c895e3aecfeb66a0132a30a74aafc22ffeb39)).
 
 | Run | Result | Transaction |
 | --- | --- | --- |
-| 1: USDC overweight, sell | `ScheduledRun(traded=true)`. Swapped 0.128852 USDC for 0.06991741 WHBAR. NAV 10.0893 to 10.0890 HBAR. USDC leg back to target | [1791007856.060140104](https://hashscan.io/testnet/transaction/1791007856.060140104) |
-| 2: USDC underweight, buy | After a second outside swap pushed USDC back down (tick 39602) ([swap](https://hashscan.io/testnet/transaction/0x821077eaa53e28cb1c9b6eb32f263e7f39e36ffc2c495046aed48e6c58de408c)): `ScheduledRun(traded=true)`. Swapped 0.07639555 WHBAR for 0.145183 USDC. NAV 9.9799 to 9.9797. Weights back to 40.02 / 29.98 / 30.00 | [1791008035.035022208](https://hashscan.io/testnet/transaction/1791008035.035022208) |
+| 1: USDC overweight, sell | `ScheduledRun(traded=true)`. Swapped 0.129039 USDC for 0.0699529 WHBAR. NAV 10.08934544 to 10.08908606 HBAR. Fee 1.9920 HBAR | [1791020419.010852853](https://hashscan.io/testnet/transaction/1791020419.010852853) |
+| 2: USDC underweight, buy | After the outside account swapped its USDC back ([swap](https://hashscan.io/testnet/transaction/0xed1a7ea323b1a33c793a71f06afbbc3685b999f22442bff6fbada91ecac32279)): `ScheduledRun(traded=true)`. Swapped 0.0721512 WHBAR for 0.136961 USDC. NAV 9.98596959 to 9.98580165 HBAR. Weights back to 40.04 / 29.96 / 30.00. Fee 1.3964 HBAR | [1791020800.024519104](https://hashscan.io/testnet/transaction/1791020800.024519104) |
 
-Runs with nothing outside the band emit `ScheduledRun(traded=false)`, for example at consensus second 1791007678.
-
-### Deposit and redeem through the app
-
-A burner wallet (account 0.0.10838073, unlimited auto-association) drove the Next.js fund page:
-
-- Deposit 5 HBAR: 4.99048386 IBSK minted against a page estimate of 4.9999 and a floor of 4.8499. Transaction [0x2fcdac89...](https://hashscan.io/testnet/transaction/0x2fcdac89a903e2bd9377df92aea9e9c447bd2d2a800a69e059b3f16a0c588d5a), 429,187 gas.
-- Redeem 2 IBSK (approve, then redeem): 0.80076975 WHBAR, 23.985553 SAUCE and 1.143176 USDC, equal to the preview shown before signing. [HashScan](https://hashscan.io/testnet/transaction/0x156e6b815067557710804a9c1d8f824cdbbf74417857377057063c8cb7eb8feb)
+Runs with nothing outside the band emit `ScheduledRun(traded=false)` at a fee of 1.3055 HBAR: [1791020053.074818208](https://hashscan.io/testnet/transaction/1791020053.074818208), [1791020236.143945104](https://hashscan.io/testnet/transaction/1791020236.143945104) and [1791020611.025734303](https://hashscan.io/testnet/transaction/1791020611.025734303).
 
 ### Every flow on that vault
 
 | Step | Gas | Transaction |
 | --- | --- | --- |
-| initialize (creates the HTS share token) | 2,319,199 | [0x48be3fac...](https://hashscan.io/testnet/transaction/0x48be3fac85e38fd15d40c3c5ff4b8a6efe3fdb947b2d1a22f70e3b82c7f101ee) |
-| associate IBSK (HIP-719) | 726,488 | [0x411622c3...](https://hashscan.io/testnet/transaction/0x411622c384cdd17646ba8e05a3d7beb5680156e77ac9255f7c929d8a4a8f29a8) |
-| deposit 20 HBAR: 6 WHBAR for 239.4005 SAUCE, 6 WHBAR for 11.3798 USDC, 19.9568 IBSK minted | 1,137,106 | [0x166dbdf6...](https://hashscan.io/testnet/transaction/0x166dbdf605c53460968ffec8becd0ee5ed30eeb0e395bfb3b2b1708ed5beb102) |
-| rebalance, nothing drifted (`traded=false`) | 121,408 | [0xdd9beb67...](https://hashscan.io/testnet/transaction/0xdd9beb6769ce51dde656f632de15f580259bf858d332cdd40a0a0a52df2be062) |
-| fuel 10 HBAR | 21,055 | [0x1441846...](https://hashscan.io/testnet/transaction/0x1441846009e435af9371bbf9073a1e46e496574c4a5d7194600d8b4919c2bbbb) |
-| startAutomation 180 s | 1,509,051 | [0x7923a785...](https://hashscan.io/testnet/transaction/0x7923a7852a6441465dbd9a16f5a7f3ae3a890d2f205b39791951615aba745f6f) |
-| approve shares | 727,032 | [0xd0577d8...](https://hashscan.io/testnet/transaction/0xd0577d8130e84f3f56684eab0fde805f6c70fb3758ebab502efc4b85d1add0c8) |
-| redeem 9.9784 IBSK: 3.9998 WHBAR, 119.6943 SAUCE, 5.6896 USDC | 142,321 | [0x4c33133b...](https://hashscan.io/testnet/transaction/0x4c33133b1fb8caf8d9e3f8b28a68543f1edef4551dd8bc83b9a51af1e5534328) |
+| deploy | 3,876,881 | [0xaef5c843...](https://hashscan.io/testnet/transaction/0xaef5c843c398a07f20cc6be6cb11b2941500d895b5edf8dad4573bc231462434) |
+| initialize (creates the HTS share token) | 2,319,221 | [0x38245d13...](https://hashscan.io/testnet/transaction/0x38245d131fb56f4836b0da83f7cc9432db22143d3004864c13aa71ff7bb1fb85) |
+| associate IBSK (HIP-719) | 726,488 | [0x28033157...](https://hashscan.io/testnet/transaction/0x28033157f7d3a35d70e48e292c9185a789327d5e05b2956ddae1b8dea67aaf51) |
+| deposit 20 HBAR: NAV 19.97016806 HBAR as 8 WHBAR, 239.189663 SAUCE, 11.390662 USDC | 1,137,056 | [0xe993751c...](https://hashscan.io/testnet/transaction/0xe993751cad6ac8774be9387eafa0e7fed1280a3d7790889314f3cb12a70b7b0c) |
+| rebalance by the owner, nothing drifted (`traded=false`) | 123,747 | [0x2ba1f949...](https://hashscan.io/testnet/transaction/0x2ba1f949437d52d8daf1eb1e3a685595917dda69d1a8cfa367764753da4e3e03) |
+| fuel 10 HBAR | 21,055 | [0xaa58ae72...](https://hashscan.io/testnet/transaction/0xaa58ae726e4ab26de903c7801dfac45ab5eebeb83792ce77b045184b80b68a38) |
+| startAutomation 180 s | 1,509,464 | [0x9c9c3633...](https://hashscan.io/testnet/transaction/0x9c9c3633ea9ec589ad9c73e9a72c5714b874a7ee37f92f42adb7f3555a2bf003) |
+| approve shares | 727,032 | [0xe19601a8...](https://hashscan.io/testnet/transaction/0xe19601a83d48bb43bc603ea38f3bd4f83045ef3a778a999fbbf34d6066c5695e) |
+| redeem 9.97841756 IBSK (half of the supply) | 142,617 | [0x2ff783dc...](https://hashscan.io/testnet/transaction/0x2ff783dfacad395e258076bec7adb777ee99be35cbaa6bf83f7248b068e08b7e) |
+| stopAutomation (`ScheduleDeleted(0.0.10840122, 22)`) | 100,988 | [0x12f66ba5...](https://hashscan.io/testnet/transaction/0x12f66ba5cd9c1deda4b87089fd165badaff40e041f1d092514c6f7381c29a554) |
+| fuel +60.5 HBAR | 21,055 | [0xa8235b6c...](https://hashscan.io/testnet/transaction/0xa8235b6c7159771a95069a9785e4091b53f9351d3c11f9d3051e9224284689fb) |
+| startAutomation 21600 s | 1,509,476 | [0xbfbc6ff0...](https://hashscan.io/testnet/transaction/0xbfbc6ff038f00b36f89208fbfa1f31d9e1088039cd51f9e05b5de8248c82d19a) |
 
-An earlier deployment ran the loop at a 120 second interval with a 5% band. Six consecutive runs started by the network, about 118 seconds apart, then `stopAutomation` and `withdrawFuel`. Two of them: [1791006680.001599104](https://hashscan.io/testnet/transaction/1791006680.001599104) and [1791007035.034493895](https://hashscan.io/testnet/transaction/1791007035.034493895), each a `CONTRACTCALL` with result `SUCCESS` paid by the vault.
+### Deposit and redeem through the app
+
+A burner wallet (account 0.0.10838073) drove the Next.js fund page against the previous deployment of the same app:
+
+- Deposit 5 HBAR: 4.99048386 IBSK minted against a page estimate of 4.9999 and a floor of 4.8499. Transaction [0x2fcdac89...](https://hashscan.io/testnet/transaction/0x2fcdac89a903e2bd9377df92aea9e9c447bd2d2a800a69e059b3f16a0c588d5a), 429,187 gas.
+- Redeem 2 IBSK (approve, then redeem): 0.80076975 WHBAR, 23.985553 SAUCE and 1.143176 USDC, equal to the preview shown before signing. [HashScan](https://hashscan.io/testnet/transaction/0x156e6b815067557710804a9c1d8f824cdbbf74417857377057063c8cb7eb8feb).
 
 ## Costs
 
-Measured on testnet. Fee is gas times the network gas price at the time.
+Measured on vault C. Fee is gas times the network gas price at the time.
 
 | Step | Gas | HBAR |
 | --- | --- | --- |
-| `initialize` (includes HTS token creation fee) | 2,319,199 | 13.7422 |
+| `initialize` (includes HTS token creation fee) | 2,319,221 | 13.8351 |
 | Associate a token (HIP-719) | 726,488 | 0.6102 |
-| First deposit (10 HBAR, approves the router for each token) | 1,136,144 | 0.9543 |
-| Later deposits (router already approved) | 429,078 | 0.3604 |
+| First deposit (20 HBAR, approves the router for each token) | 1,137,056 | 0.9551 |
 | Approve shares to the vault | 727,032 | 0.6107 |
-| Redeem | 142,321 | 0.1195 |
-| `rebalance`, nothing drifted | 121,408 | 0.1019 |
-| `startAutomation` | 1,509,051 | 1.2676 |
-| Scheduled run, no trade | n/a | 1.305 |
-| Scheduled run with a swap | n/a | 1.396 |
+| Redeem | 142,617 | 0.1198 |
+| `rebalance` by the owner, nothing drifted | 123,747 | 0.1039 |
+| `startAutomation` | 1,509,464 | 1.2679 |
+| `stopAutomation` | 100,988 | 0.0848 |
+| Scheduled run, no trade | n/a | 1.3055 |
+| Scheduled run with a buy | n/a | 1.3964 |
+| Scheduled run with a sell | n/a | 1.9920 |
 
-Scheduled runs are charged to the vault, not to a person. An HTS approval from a contract costs about 700k gas, so the vault approves the router once per token for the token's total supply and re-approves only when short. That is why the second deposit costs 429k instead of 1.14M.
+Scheduled runs are charged to the vault, not to a person. An HTS approval from a contract costs about 700k gas, so the vault approves the router once per token for the token's total supply and re-approves only when short. That is why a later deposit costs about 429k gas instead of 1.14M, and why the first sell carries about 0.6 HBAR more than a buy.
 
-Runway on the app's vault: 83.53 HBAR of fuel, 1.396 HBAR per run, 3.52 HBAR reservation, so about 58 runs, roughly 14 days at 6 hours per run.
+Runway on the app's vault: 80.0026 HBAR of fuel, 1.3964 HBAR per run, 3.52 HBAR reservation, so about 55 runs, roughly 14 days at 6 hours per run.
 
 ## Customize
 
@@ -218,7 +223,7 @@ legs[0] = BasketVault.LegConfig({
 });
 ```
 
-WHBAR takes `10_000 - sum(weights)`, so the legs must sum to less than 10,000. The constructor reverts with `BadConfig` for a pool that is not paired with WHBAR, a zero weight, or weights that leave nothing for WHBAR. Resize the `legs` array to add or drop a token. `packages/foundry/script/live-testnet.sh` hard-codes the default WHBAR, SAUCE and USDC addresses for the associations before redeeming, so edit those three lines when you change tokens.
+WHBAR takes `10_000 - sum(weights)`, so the legs must sum to less than 10,000. The constructor reverts with `BadConfig` for a pool that is not the SaucerSwap V2 factory's own pool for the pair and fee, a duplicate leg token, a zero weight, weights that leave nothing for WHBAR, zero slippage, a zero oracle age, a price guard with zero tolerance or a feed that does not report 8 decimals. Resize the `legs` array to add or drop a token. `packages/foundry/script/live-testnet.sh` hard-codes the default WHBAR, SAUCE and USDC addresses for the associations before redeeming, so edit those three lines when you change tokens.
 
 ### Drift band
 
@@ -252,7 +257,7 @@ packages/foundry/
   contracts/interfaces/              HTS 0x167, HSS 0x16b, HIP-719, SaucerSwap V2, Chainlink
   script/Deploy.s.sol                the basket definition: tokens, pools, weights, guard
   script/live-testnet.sh             yarn foundry:live
-  test/BasketVault*.t.sol            four suites; BasketVaultBase.sol etches the mocks
+  test/BasketVault*.t.sol            eleven suites; BasketVaultBase.sol etches the mocks
   test/mocks/                        HTS, HSS, SaucerSwap and Chainlink-feed mocks
 packages/nextjs/
   app/page.tsx                       the fund page
@@ -269,9 +274,9 @@ AGENTS.md                            briefing for coding agents (CLAUDE.md loads
 yarn foundry:test
 ```
 
-110 tests in four suites, none needing a network: setup (23), deposit and redeem (29), rebalance (27), automation (31). They include a fuzz test that a deposit-redeem round trip never pays out more than went in. `BasketVaultBase.sol` etches HTS, HSS, SaucerSwap router and pool mocks and a Chainlink feed mock at the addresses the contract calls, so `BasketVault` runs unmodified.
+148 tests across 11 suites, none needing a network: constructor and initialize (34), deposit and redeem (29), rebalance, guard and views (28), automation (39), frozen leg and `redeemExcept` (10), sandwich regression on constant-product pools (4), trade cap (4). They include a fuzz test that a deposit-redeem round trip never pays out more than went in. `BasketVaultBase.sol` etches HTS, HSS, SaucerSwap router and pool mocks and a Chainlink feed mock at the addresses the contract calls, so `BasketVault` runs unmodified.
 
-The suite was mutation-checked: 16 deliberate bugs, were each caught by at least one test.
+The suite was mutation-checked: 18 deliberate bugs (caller gate removed, skip mask ignored, `rearm` guards removed, jitter removed, probe cut back to 16 seconds, factory check removed, trade cap removed on sell and on buy, `deleteSchedule` result dropped, constructor checks removed) were each caught by at least one test.
 
 `yarn foundry:test:testnet` runs the suite against a fork of Hedera testnet.
 

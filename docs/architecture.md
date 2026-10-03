@@ -169,7 +169,7 @@ out_token = balanceOf(vault, token) * shares / supply        for WHBAR and every
 
 ### Worked example: the first deposit of vault B
 
-Transaction [0x166dbd...](https://hashscan.io/testnet/transaction/0x166dbdf605c53460968ffec8becd0ee5ed30eeb0e395bfb3b2b1708ed5beb102), 20 HBAR, supply 0.
+An earlier deployment of the same design. Transaction [0x166dbd...](https://hashscan.io/testnet/transaction/0x166dbdf605c53460968ffec8becd0ee5ed30eeb0e395bfb3b2b1708ed5beb102), 20 HBAR, supply 0.
 
 | Step | Value |
 | --- | --- |
@@ -202,7 +202,7 @@ For a leg with value `v`, target `t = NAV * weightBps / 10_000` and band `b = NA
 - buy when `v + b < t`: `spend = min(t - v, maxTrade, WHBAR balance)`;
 - `maxTrade = NAV * maxTradeBps / 10_000`.
 
-Sells run first so the buys have WHBAR to spend. A leg further out than `maxTrade` converges over several runs instead of reverting on a trade the pool cannot fill. Vault B run 2 had NAV 1,008,929,495 and USDC 0.70 points over target (an excess of about 7.1 million tinybar) and sold 128,852 of its 5,690,176 raw USDC; a 20% cap on that NAV is 201,785,899 tinybar, so the cap leaves a correction of that size untouched.
+Sells run first so the buys have WHBAR to spend. A leg further out than `maxTrade` converges over several runs instead of reverting on a trade the pool cannot fill. Vault C run 1 had NAV 10.08934544 HBAR and USDC 0.70 points over target (an excess of about 7.1 million tinybar) and sold 0.129039 USDC; a 20% cap on that NAV is 201,786,908 tinybar, so the cap leaves a correction of that size untouched.
 
 ## Invariants and the tests that enforce them
 

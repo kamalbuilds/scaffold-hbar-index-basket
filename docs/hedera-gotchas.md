@@ -7,8 +7,8 @@ export FOUNDRY_DISABLE_NIGHTLY_WARNING=1
 RPC=https://testnet.hashio.io/api
 M=https://testnet.mirrornode.hedera.com/api/v1
 HSS=0x000000000000000000000000000000000000016b
-V=0x1af34177Be9371490e96cE5420C71D8D95c97EaB       # vault B, 0.0.10837826
-VID=0.0.10837826
+V=0xe72FbF68536D29d3A9e0D897C2aE813B7B279058       # vault C, 0.0.10839904
+VID=0.0.10839904
 n() { awk '{print $1}'; }
 ```
 
@@ -37,10 +37,10 @@ n() { awk '{print $1}'; }
 
 **In BasketVault.** Every amount in the contract is tinybar: `deposit` mints against `msg.value`, `nav()` returns WHBAR tinybar (WHBAR has 8 decimals as well), `withdrawFuel` sends tinybar. The app uses `parseEther("10")` for 10 HBAR and displays tinybar sums as HBAR through the mirror node.
 
-**Reproduce.** The 20 HBAR first deposit of vault B reads three ways:
+**Reproduce.** The 20 HBAR first deposit of vault C reads three ways:
 
 ```bash
-H=0x166dbdf605c53460968ffec8becd0ee5ed30eeb0e395bfb3b2b1708ed5beb102
+H=0xe993751cad6ac8774be9387eafa0e7fed1280a3d7790889314f3cb12a70b7b0c
 cast tx $H value --rpc-url $RPC                       # 20000000000000000000   (weibar)
 curl -s $M/contracts/results/$H | jq .amount          # 2000000000             (tinybar)
 cast balance $V --rpc-url $RPC                        # fuel in weibar
@@ -85,23 +85,23 @@ cast call $USDC "approve(address,uint256)(bool)" $ROUTER 1000000000000000 --from
 cast call $USDC "approve(address,uint256)(bool)" $ROUTER 1000000000000001 --from $W --rpc-url $RPC   # AMOUNT_EXCEEDS_TOKEN_MAX_SUPPLY
 ```
 
-The vault's own allowance equals the supply minus what it has spent. Vault B sold 128,852 raw USDC in run 2:
+The vault's own allowance equals the supply minus what it has spent. Vault C sold 129,039 raw USDC in its run 1 (the 0.129039 USDC of the sell), so the allowance reads the supply minus 129,039:
 
 ```bash
-cast call $USDC "allowance(address,address)(uint256)" $V $ROUTER --rpc-url $RPC | n    # 699999999871148
-cast call $USDC "totalSupply()(uint256)" --rpc-url $RPC | n                            # 700000000000000
-# 700000000000000 - 699999999871148 = 128852
+cast call $USDC "allowance(address,address)(uint256)" $V $ROUTER --rpc-url $RPC | n
+cast call $USDC "totalSupply()(uint256)" --rpc-url $RPC | n
+# totalSupply - allowance = the raw USDC the vault has sold since it approved
 ```
 
 Gas of the approvals and of the deposits that carry them:
 
 ```bash
-for h in 0xd0577d8130e84f3f56684eab0fde805f6c70fb3758ebab502efc4b85d1add0c8 \
-         0x166dbdf605c53460968ffec8becd0ee5ed30eeb0e395bfb3b2b1708ed5beb102 \
+for h in 0xe19601a83d48bb43bc603ea38f3bd4f83045ef3a778a999fbbf34d6066c5695e \
+         0xe993751cad6ac8774be9387eafa0e7fed1280a3d7790889314f3cb12a70b7b0c \
          0x2fcdac89a903e2bd9377df92aea9e9c447bd2d2a800a69e059b3f16a0c588d5a; do
   curl -s $M/contracts/results/$h | jq -c '{gas_used}'
 done
-# 727032 (share token approval), 1137106 (first deposit, approves WHBAR), 429187 (later deposit)
+# 727032 (share token approval), 1137056 (first deposit, approves WHBAR), 429187 (a later deposit, on the previous deployment)
 ```
 
 Unit tests: `test_deposit_onlyApprovesWhenAllowanceIsShort`, `test_rebalance_approvesTheSoldLegOnceForItsSupply`.
@@ -118,16 +118,16 @@ Unit tests: `test_deposit_onlyApprovesWhenAllowanceIsShort`, `test_rebalance_app
 cast call $V "runScheduled()" --rpc-url $RPC            # reverts with data 0x14d4a4e8
 cast sig "OnlySelf()"                                   # 0x14d4a4e8
 T=$(cast keccak "ScheduledRun(bool)")
-curl -s "$M/contracts/$VID/results/logs?topic0=$T&timestamp=gte:1791006000&timestamp=lte:1791099999" | jq '.logs|length'   # 3
+curl -s "$M/contracts/$VID/results/logs?topic0=$T&timestamp=gte:1791006000&timestamp=lte:1791099999" | jq '.logs|length'   # 5 or more
 ```
 
-Three `ScheduledRun` events exist because three network executions passed the `OnlySelf` check. Unit test: `test_runScheduled_revertsForEveryoneButTheVault`.
+Five `ScheduledRun` events exist (1791020053 to 1791020800, more once the 6 hour cadence has run) because five network executions passed the `OnlySelf` check. Unit test: `test_runScheduled_revertsForEveryoneButTheVault`.
 
 ## 3,000,000 gas is the floor for a self-rescheduling call
 
 **What happens.** `scheduleCall` alone costs about 1.4M gas. A scheduled function that does work and then books its successor measured 1,511,731 gas on testnet. Booked with 1,000,000 gas, the function runs, its inner `scheduleCall` runs out of gas, and the outer call still reports `SUCCESS`. The chain ends and nothing says so.
 
-**In BasketVault.** `MIN_SCHEDULED_GAS = 3_000_000`. The constructor reverts `BadConfig()` below it, and the deploy script books with 4,000,000. Gas that is not used is refunded, so the headroom is nearly free: the three runs of vault B burned 1,553,578, 2,370,784 and 1,661,662 gas inside a 4,000,000 limit.
+**In BasketVault.** `MIN_SCHEDULED_GAS = 3_000_000`. The constructor reverts `BadConfig()` below it, and the deploy script books with 4,000,000. Gas that is not used is refunded, so the headroom is nearly free: the runs of vault C were charged 1.3055, 1.3964 and 1.9920 HBAR against a 4,000,000 gas booking.
 
 **Reproduce.** Two probe contracts, identical but for the gas budget, are live on testnet:
 
@@ -137,10 +137,8 @@ cast call 0xb4f980DBdb7b62f5193d5Ab0680DB468b5143445 "ticks()(uint256)" --rpc-ur
 
 cast call $V "MIN_SCHEDULED_GAS()(uint256)" --rpc-url $RPC | n    # 3000000
 cast call $V "scheduledGas()(uint256)" --rpc-url $RPC | n         # 4000000
-for h in 0xaa76a58783df5a873fe10d8324ba51ad4ae460eb05259b14ddfdc081ec90365f \
-         0x90afc42150f328d7534ecee391400dfe5248eb6340f05398ab2d9c91fedd28f7 \
-         0x5c1fb11f8f8b74b8a9325ab7c846c8de444804b40d6209755384fb2143d517cd; do
-  curl -s $M/contracts/results/$h | jq -c '{gas_used,gas_limit}'
+for ts in 1791020053.074818208 1791020419.010852853 1791020800.024519104; do
+  curl -s $M/contracts/$VID/results/$ts | jq -c '{gas_used,gas_limit}'
 done
 ```
 
@@ -155,8 +153,9 @@ Unit test: `test_constructor_rejectsScheduledGasBelowThreeMillion`.
 **Reproduce.** Each execution carries exactly one `SCHEDULECREATE` child:
 
 ```bash
-curl -s "$M/transactions?timestamp=gte:1791007856.000000000&timestamp=lt:1791007857.000000000&limit=100" |
-  jq '[.transactions[]|select(.transaction_id=="0.0.7314364-1791007493-460025934" and .name=="SCHEDULECREATE")]|length'
+ID=$(curl -s "$M/transactions?timestamp=1791020419.010852853" | jq -r '.transactions[0].transaction_id')
+curl -s "$M/transactions?timestamp=gte:1791020419.010852853&timestamp=lt:1791020420&limit=100" |
+  jq --arg id "$ID" '[.transactions[]|select(.transaction_id==$id and .name=="SCHEDULECREATE")]|length'
 # 1
 ```
 
@@ -207,7 +206,7 @@ Unit tests with a mock Schedule Service that marks seconds busy: `test_capacity_
 
 ## The payer needs the full gas reservation, not the gas a run burns
 
-**What happens.** The network checks the payer of a scheduled call against the gas reserved, `gasLimit x gas price`, not the gas burned. A vault holding more than a run costs can still fail with `INSUFFICIENT_PAYER_BALANCE`. At testnet's 88 tinybar per gas a 4,000,000 gas booking reserves 3.52 HBAR while a run charges 1.305 to 1.996 HBAR.
+**What happens.** The network checks the payer of a scheduled call against the gas reserved, `gasLimit x gas price`, not the gas burned. A vault holding more than a run costs can still fail with `INSUFFICIENT_PAYER_BALANCE`. At testnet's 88 tinybar per gas a 4,000,000 gas booking reserves 3.52 HBAR while a run charges 1.3055 to 1.9920 HBAR.
 
 **In BasketVault.** Keep the native balance above the reservation. The runway, the number of runs the fuel pays for, is
 
@@ -224,17 +223,17 @@ GP=$(cast gas-price --rpc-url $RPC | n)                          # weibar per ga
 TB=$((GP / 10000000000))                                         # tinybar per gas: 88
 GAS=$(cast call $V "scheduledGas()(uint256)" --rpc-url $RPC | n)
 FUEL=$(curl -s $M/accounts/$VID | jq .balance.balance)           # tinybar
-COST=139579608                                                   # charged by vault B's latest traded run (run 3)
+COST=$(curl -s "$M/transactions?timestamp=1791020800.024519104" | jq '.transactions[0].charged_tx_fee')   # the buy run: 1.3964 HBAR
 python3 -c "r=$GAS*$TB; print('reserve', r/1e8, 'HBAR  runway', ($FUEL-r)/$COST+1, 'runs')"
-# reserve 3.52 HBAR  runway 58.3 runs
+# reserve 3.52 HBAR; with 80.0026 HBAR of fuel and 1.3964 HBAR per run the runway is about 55 runs
 ```
 
-What a run charges, read from the mirror for vault B's three runs:
+What a run charges, read from the mirror for the five runs of vault C:
 
 ```bash
-curl -s "$M/transactions?account.id=$VID&timestamp=gte:1791007600&timestamp=lte:1791008300&order=asc&limit=100" |
+curl -s "$M/transactions?account.id=$VID&timestamp=gte:1791020000&timestamp=lte:1791020900&order=asc&limit=100" |
   jq -r '.transactions[]|select(.scheduled==true)|"\(.consensus_timestamp) charged=\(.charged_tx_fee)"'
-# 130500552 (no trade), 199145856 (sell, includes the one-time USDC approval), 139579608 (buy)
+# 1.3055 HBAR (no trade, three runs), 1.9920 HBAR (sell, includes the one-time USDC approval), 1.3964 HBAR (buy)
 ```
 
 A 4 HBAR vault dying with 2.76 HBAR inside it is A testnet measurement of the same rule, still readable:
@@ -247,18 +246,19 @@ curl -s "$M/transactions?account.id=0.0.10684549&limit=2&order=desc" | jq -r '.t
 
 ## Scheduled calls read a clock about two seconds early
 
-**What happens.** A call booked for second `T` executes at consensus `T.xxx` and reads `block.timestamp` about two seconds earlier. A testnet run recorded `scheduled for 1788608600, observed 1788608598`.
+**What happens.** A call booked for second `T` executes at a consensus time within second `T` and reads `block.timestamp` about two seconds earlier. A testnet run recorded `scheduled for 1788608600, observed 1788608598`.
 
-**In BasketVault.** The vault books relative to `block.timestamp` and never compares a deadline against it, so it has nothing to reject on arrival. Its effect is measurable: without the booking offset, a run re-books `interval - 2` seconds after the previous expiry.
+**In BasketVault.** The vault books relative to `block.timestamp` and never compares a deadline against it, so it has nothing to reject on arrival. Its effect is measurable: a run books its successor `interval + jitter - 2` seconds after the previous expiry, where the jitter is the contract's 0 to 29 second booking offset.
 
-**Reproduce.** Vault B (180 second interval) and vault A (120 second interval) were deployed before the 0 to 29 second booking offset, so their spacing shows the clock alone:
+**Reproduce.** Vault C runs a 180 second interval with the 0 to 29 second booking offset, so its gaps are the interval plus the offset less the clock lag:
 
 ```bash
 T=$(cast keccak "RunBooked(address,uint256)")
 curl -s "$M/contracts/$VID/results/logs?topic0=$T&order=asc&timestamp=gte:1791006000&timestamp=lte:1791099999" |
   jq -r '.logs[]|.data' | while read e; do cast to-dec $e; done
-# 1791007678, 1791007856, 1791008035, 1791008213 : steps of 178, 179, 178 for interval 180
 ```
+
+The five executions land at 1791020053, 1791020236, 1791020419, 1791020611 and 1791020800: gaps of 183, 183, 192 and 189 seconds. Earlier deployments without the offset re-booked every `interval - 2` seconds (178 to 179 on a 180 second interval, 118 on a 120 second interval), which is the clock lag alone; their records are in [testnet-evidence.md](testnet-evidence.md#earlier-deployments-vault-b-and-vault-a).
 
 ## A balance read inside a scheduled run is short by the unreturned allowance
 
