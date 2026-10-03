@@ -22,7 +22,8 @@
     "test:mainnet": "forge test --fork-url https://mainnet.hashio.io/api --chain-id 295 --ffi",
     "verify:testnet": "forge verify-contract --chain-id 296 --verifier sourcify",
     "verify:mainnet": "forge verify-contract --chain-id 295 --verifier sourcify",
-    "postinstall": "shx cp -n .env.example .env"
+    "postinstall": "shx cp -n .env.example .env",
+    "live": "bash script/live-testnet.sh"
   },
   "dependencies": {
     "dotenv": "~16.3.1",
