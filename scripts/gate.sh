@@ -42,7 +42,7 @@ for f in README.md AGENTS.md LICENCE packages/foundry/contracts/BasketVault.sol 
   test -f "$f" || { echo "FAIL: missing $f"; exit 1; }
 done
 
-run() { if [ "$PM" = npm ]; then npm run "$@"; else yarn "$@"; fi; }
+run() { if [ "$PM" = npm ]; then npm run "$1" -- "${@:2}"; else yarn "$@"; fi; }
 echo "== contract tests"; run foundry:test
 echo "== lint"; run lint
 echo "== build"; run next:build
