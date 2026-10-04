@@ -8,6 +8,8 @@ npm create scaffold-hbar@latest -- --template kamalbuilds/scaffold-hbar-index-ba
 
 The `--` matters with `npm create`: without it npm keeps `--template` for itself. `npx create-scaffold-hbar@latest --template kamalbuilds/scaffold-hbar-index-basket` is equivalent.
 
+**Live app:** [index-basket-hbar.vercel.app](https://index-basket-hbar.vercel.app) reads the canonical vault on Hedera testnet: NAV, target against actual weights, automation runway and the activity feed. Connect a wallet to deposit or redeem.
+
 ## See it work in five minutes
 
 1. Scaffold the template:
