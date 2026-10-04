@@ -7,6 +7,8 @@ One HBAR deposit into `BasketVault` buys a 40% WHBAR / 30% SAUCE / 30% USDC bask
 
 **Live app:** [index-basket-hbar.vercel.app](https://index-basket-hbar.vercel.app) reads the canonical vault on Hedera testnet: NAV, target against actual weights, automation runway and the activity feed. Connect a wallet to deposit or redeem.
 
+**Demo video:** [docs/demo/index-basket-demo.mp4](docs/demo/index-basket-demo.mp4), 2 min 42 s: the live app, a deposit, a network-triggered rebalance on HashScan, the protections and the one-command scaffold.
+
 ![Index Basket fund page on Hedera testnet: net asset value 12.3847 HBAR, share price $0.1058, Chainlink HBAR/USD $0.1020, and the target against actual bar at 40% WHBAR, 30% SAUCE, 30% USDC](docs/images/dashboard.png)
 
 **10 rebalance runs executed by the Hedera network on the vault's own schedule, 4 of them traded, 0 triggered by a person.** Read from the mirror node on 2026-10-04 14:48 UTC (block 41350655) for vault C `0xe72FbF68536D29d3A9e0D897C2aE813B7B279058` (contract 0.0.10839904). Every one is a `CONTRACTCALL` with `scheduled: true`. Recount it:
