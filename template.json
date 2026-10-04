@@ -37,11 +37,15 @@
               "command": "{run:foundry:test}"
             },
             {
-              "label": "Fund an ECDSA testnet account",
+              "label": "Generate a deployer account",
+              "command": "{run:foundry:account:generate}"
+            },
+            {
+              "label": "Fund its address on the testnet faucet",
               "url": "https://portal.hedera.com/faucet"
             },
             {
-              "label": "Put its key in packages/foundry/.env as DEPLOYER_PRIVATE_KEY, then deploy and run every flow on testnet",
+              "label": "Put its key in packages/foundry/.env as DEPLOYER_PRIVATE_KEY (yarn foundry:account:reveal-pk prints it), then deploy and run every flow on testnet",
               "command": "{run:foundry:live}"
             },
             {
