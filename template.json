@@ -29,6 +29,10 @@
           "title": "Next steps",
           "steps": [
             {
+              "label": "Install the Foundry build Hashio accepts (Foundry 1.8 is rejected, hiero-json-rpc-relay#5826)",
+              "command": "foundryup --install v1.7.1"
+            },
+            {
               "label": "Run the contract tests",
               "command": "{run:foundry:test}"
             },

@@ -361,3 +361,27 @@ curl -s "$M/contracts/$VID/results/logs?order=asc&limit=100" | jq '.logs|length'
 ```
 
 **Source.** Our measurement.
+
+## Foundry 1.8 cannot reach Hashio, so the toolchain is pinned to v1.7.1
+
+**What happens.** Foundry 1.8.x sends EIP-1898 block objects (`{"blockNumber": "0x..."}`) with its state reads. Hashio's relay accepts the object form on `eth_call` only, and answers `eth_getBalance`, `eth_getCode`, `eth_getTransactionCount` and `eth_getStorageAt` with `-32602` before `forge script` sends anything. Foundry 1.7.1 sends plain tags and runs the same script to completion. Tracked upstream as [hiero-json-rpc-relay#5826](https://github.com/hiero-ledger/hiero-json-rpc-relay/issues/5826).
+
+**In this repository.** `foundryup --install v1.7.1` is the first step of the template's outro, and CI installs the same version through `foundry-rs/foundry-toolchain@v1` with `version: v1.7.1`, so the contract tests and the deploy script run on the toolchain that Hashio accepts.
+
+**Reproduce.**
+
+```bash
+curl -s $RPC -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"eth_getBalance","params":["0x5bcE1085cfa81D11382924C45f93125932790e04","latest"]}' | jq -r '.result'
+# 0x32b6e11a00986d8800   (a hex balance: the string tag works)
+curl -s $RPC -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"eth_getBalance","params":["0x5bcE1085cfa81D11382924C45f93125932790e04",{"blockNumber":"0x100"}]}' | jq -r '.error.code'
+# -32602   (the EIP-1898 object form Foundry 1.8 sends)
+
+cd packages/foundry
+forge --version                                  # forge Version: 1.7.1
+forge script script/Deploy.s.sol --rpc-url $RPC  # Script ran successfully. SIMULATION COMPLETE.
+# the same command under v1.8.4: Error: HTTP error 400 ... "code":-32602 ... Invalid parameter 1
+```
+
+**Source.** Our runs on 2026-10-04 against the official v1.7.1 and v1.8.4 release builds, and the relay issue above.
