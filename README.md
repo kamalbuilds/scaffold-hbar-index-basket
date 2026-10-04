@@ -105,6 +105,7 @@ Prerequisites:
 - Node.js 20.18.3 or later
 - Yarn (`corepack enable`) or npm. In an npm project every `yarn x` below is `npm run x`
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) (`forge`, `cast`), plus `jq` and `curl` for the live script
+- Foundry 1.7.1 (`foundryup --install v1.7.1`): Foundry 1.8 sends EIP-1898 block objects that the Hashio relay rejects with `-32602` ([hiero-json-rpc-relay#5826](https://github.com/hiero-ledger/hiero-json-rpc-relay/issues/5826)), see [docs/hedera-gotchas.md](docs/hedera-gotchas.md)
 - An ECDSA Hedera testnet account funded from the [portal faucet](https://portal.hedera.com/faucet)
 
 Run it:
