@@ -305,6 +305,13 @@ cast call 0xAF685FB45C12b92b5054ccb9313e135525F9b5d5 "latestRoundData()(uint80,i
 
 Every address returns bytecode, `getPool` returns the two pools above, and the Chainlink proxy (8 decimals, 86400 s heartbeat) answered 10201640 ($0.10202 per HBAR) with `updatedAt` 1791102719, thirty-four minutes before the read.
 
+The table is checked by a mainnet fork test that deploys `BasketVault` with exactly these addresses and the guard on (`guardLeg: 1`, `maxDeviationBps: 300`). The constructor verifies both pools against the factory, and the test asserts the USDC pool's implied HBAR/USD sits within 3% of Chainlink (read 2026-10-04: pool $0.10194, Chainlink $0.10202):
+
+```bash
+cd packages/foundry
+forge test --match-path test/MainnetConfig.fork.t.sol --fork-url https://mainnet.hashio.io/api -vv
+```
+
 ## Project layout
 
 ```
