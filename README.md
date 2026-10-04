@@ -1,6 +1,6 @@
 # Index Basket
 
-A tokenised index fund on Hedera, as a [Scaffold-HBAR](https://docs.hedera.com/solutions/tools/scaffold-hbar/index) template. One HBAR deposit into `BasketVault` buys a 40% WHBAR / 30% SAUCE / 30% USDC basket on SaucerSwap V2 in a single transaction and mints an HTS share token (IBSK) for your slice. Redeeming burns shares and pays out your slice of every token in kind. The vault rebalances itself on a timer it books with the Hedera Schedule Service, so no keeper bot, server or hot key exists anywhere. Chainlink HBAR/USD prices the fund in dollars and gates every deposit and rebalance on a fresh oracle answer. `rebalance()` belongs to the owner and to the vault's own scheduled run, so no outside caller can sandwich a rebalance.
+A tokenised index basket on Hedera, as a [Scaffold-HBAR](https://docs.hedera.com/solutions/tools/scaffold-hbar/index) template. One HBAR deposit into `BasketVault` buys a 40% WHBAR / 30% SAUCE / 30% USDC basket on SaucerSwap V2 in a single transaction and mints an HTS share token (IBSK) for your slice. Redeeming burns shares and pays out your slice of every token in kind. The vault rebalances itself on a timer it books with the Hedera Schedule Service: the Hedera network runs the schedule, so the automation path has no keeper bot, server or hot key, and the owner key is needed only to start, stop or rebalance by hand. Chainlink HBAR/USD prices the fund in dollars and gates every deposit and rebalance on a fresh oracle answer. `rebalance()` accepts only the owner or the vault's own scheduled run, so an outside caller cannot place a rebalance between its own trades (`test_regression_outsiderCannotProfitFromRebalance`).
 
 ```bash
 npm create scaffold-hbar@latest -- --template kamalbuilds/scaffold-hbar-index-basket
@@ -34,7 +34,7 @@ The `--` matters with `npm create`: without it npm keeps `--template` for itself
 - Pricing a basket from SaucerSwap V2 pool state and Chainlink HBAR/USD.
 - Reading contract events from the mirror node instead of `eth_getLogs`.
 
-What a reader gets from the scaffold: one Solidity contract that is the whole protocol, 148 Foundry tests that need no network, a Next.js fund page (live NAV, target against actual weights, deposit, redeem, automation runway), a script that runs every flow on testnet and prints a HashScan link per transaction, and [AGENTS.md](AGENTS.md) for coding agents.
+What a reader gets from the scaffold: one Solidity contract that holds all the vault logic, 148 Foundry tests that need no network, a Next.js fund page (live NAV, target against actual weights, deposit, redeem, automation runway), a script that runs every flow on testnet and prints a HashScan link per transaction, and [AGENTS.md](AGENTS.md) for coding agents.
 
 ## Why it needs SaucerSwap, Chainlink, HTS and HSS
 
@@ -74,7 +74,7 @@ flowchart TD
         R3 --> R4["Pay the same fraction of WHBAR, SAUCE and USDC held"]
     end
 
-    subgraph LOOP["Scheduled rebalance loop: no bot"]
+    subgraph LOOP["Scheduled rebalance loop: run by the network"]
         S1["Owner calls startAutomation"] --> S2["HSS scheduleCall: runScheduled, expiry, 4M gas"]
         S2 --> S3["Hedera calls runScheduled at expiry, paid from vault HBAR"]
         S3 --> S4["Book the successor schedule first"]
@@ -266,20 +266,50 @@ guardLeg: 1,          // index of the USDC leg
 maxDeviationBps: 300  // 3%
 ```
 
-### Mainnet
+## Deploy to mainnet
 
-1. Replace the router, WhbarHelper, WHBAR, token and pool addresses in `Deploy.s.sol` with the mainnet ones from the SaucerSwap docs, and `hbarUsdFeed` with the HBAR/USD proxy from the Chainlink feed directory.
-2. Turn on the price guard as above.
-3. Deploy through the scaffold's keystore flow: `yarn foundry:account:generate`, then `yarn foundry:deploy --network hedera_mainnet`.
-4. In the app, set `CHAIN_ID` in `packages/nextjs/utils/basket/constants.ts` to the Hedera mainnet chain and point `NEXT_PUBLIC_HEDERA_TESTNET_MIRROR_URL` at the mainnet mirror node.
+`Deploy.s.sol` holds every address the vault needs. Swap these values and turn the price guard on:
 
-The testnet addresses used by this template: Chainlink HBAR/USD proxy `0x59bC155EB6c6C415fE43255aF66EcF0523c92B4a` (8 decimals, 86400 s heartbeat), SaucerSwap V2 router `0x0000000000000000000000000000000000159398` (0.0.1414040), WhbarHelper `0x000000000000000000000000000000000050a8a7` (0.0.5286055), WHBAR `0x0000000000000000000000000000000000003aD2` (0.0.15058), SAUCE 0.0.1183558, USDC 0.0.5449, WHBAR/SAUCE pool `0x37814eDc1ae88cf27c0C346648721FB04e7E0AE7` and WHBAR/USDC pool `0x914B98992d7eD602D1f5d9084ECe8160Fc0e741a`, both 0.30%.
+| `Deploy.s.sol` field | Testnet | Mainnet |
+| --- | --- | --- |
+| `router` (SaucerSwap V2 SwapRouter) | `0x0000000000000000000000000000000000159398` (0.0.1414040) | `0x00000000000000000000000000000000003c437a` (0.0.3949434) |
+| `factory` (SaucerSwapV2Factory) | `0x00000000000000000000000000000000001243eE` (0.0.1197038) | `0x00000000000000000000000000000000003c3951` (0.0.3946833) |
+| `whbarHelper` | `0x000000000000000000000000000000000050a8a7` (0.0.5286055) | `0x000000000000000000000000000000000058a2ba` (0.0.5808826) |
+| `whbar` (WHBAR token) | `0x0000000000000000000000000000000000003aD2` (0.0.15058) | `0x0000000000000000000000000000000000163b5a` (0.0.1456986) |
+| `hbarUsdFeed` (Chainlink HBAR/USD proxy) | `0x59bC155EB6c6C415fE43255aF66EcF0523c92B4a` | `0xAF685FB45C12b92b5054ccb9313e135525F9b5d5` |
+| `legs[0].token` (SAUCE) | `0x0000000000000000000000000000000000120f46` (0.0.1183558) | `0x00000000000000000000000000000000000b2ad5` (0.0.731861) |
+| `legs[0].pool` (WHBAR/SAUCE 0.30%) | `0x37814eDc1ae88cf27c0C346648721FB04e7E0AE7` | `0x5fc19c944F1BCcF5159e6Ae92dC3bF2fF2576b98` |
+| `legs[1].token` (native USDC) | `0x0000000000000000000000000000000000001549` (0.0.5449) | `0x000000000000000000000000000000000006f89a` (0.0.456858) |
+| `legs[1].pool` (WHBAR/USDC) | `0x914B98992d7eD602D1f5d9084ECe8160Fc0e741a` (0.30%) | `0xC5B707348dA504E9Be1bD4E21525459830e7B11d` (0.15%) |
+| `guardLeg` | `type(uint256).max` (off) | `1` (the USDC leg) |
+| `maxDeviationBps` | `0` | `300` |
+
+The constructor reads each leg's fee from its pool and checks the pool against the factory, so the 0.15% mainnet WHBAR/USDC pool needs no other change. With the guard on, every deposit and rebalance compares the USDC pool's implied HBAR/USD with Chainlink and reverts beyond 3%.
+
+Deploy through the scaffold's keystore flow:
+
+```bash
+yarn foundry:account:generate
+yarn foundry:deploy --network hedera_mainnet
+```
+
+Then set `CHAIN_ID` in `packages/nextjs/utils/basket/constants.ts` to the Hedera mainnet chain and point `NEXT_PUBLIC_HEDERA_TESTNET_MIRROR_URL` at the mainnet mirror node.
+
+Mainnet values read on 2026-10-04 from the SaucerSwap contract deployments page (`curl -sL https://r.jina.ai/https://docs.saucerswap.finance/developerx/contract-deployments`) and the Chainlink Hedera mainnet feed directory (`https://reference-data-directory.vercel.app/feeds-hedera-mainnet.json`). Each row was checked against `https://mainnet.hashio.io/api`:
+
+```bash
+cast code <address> --rpc-url https://mainnet.hashio.io/api
+cast call 0x00000000000000000000000000000000003c3951 "getPool(address,address,uint24)(address)" 0x0000000000000000000000000000000000163b5a 0x00000000000000000000000000000000000b2ad5 3000 --rpc-url https://mainnet.hashio.io/api
+cast call 0xAF685FB45C12b92b5054ccb9313e135525F9b5d5 "latestRoundData()(uint80,int256,uint256,uint256,uint80)" --rpc-url https://mainnet.hashio.io/api
+```
+
+Every address returns bytecode, `getPool` returns the two pools above, and the Chainlink proxy (8 decimals, 86400 s heartbeat) answered 10201640 ($0.10202 per HBAR) with `updatedAt` 1791102719, thirty-four minutes before the read.
 
 ## Project layout
 
 ```
 packages/foundry/
-  contracts/BasketVault.sol          the whole protocol
+  contracts/BasketVault.sol          all the vault logic
   contracts/interfaces/              HTS 0x167, HSS 0x16b, HIP-719, SaucerSwap V2, Chainlink
   script/Deploy.s.sol                the basket definition: tokens, pools, weights, guard
   script/live-testnet.sh             yarn foundry:live
