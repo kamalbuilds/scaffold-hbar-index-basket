@@ -270,7 +270,7 @@ WHBAR takes `10_000 - sum(weights)`, so the legs must sum to less than 10,000. T
 
 The guard compares the implied HBAR/USD of a stablecoin leg's pool to Chainlink and reverts a deposit or rebalance when they differ by more than `maxDeviationBps`. It is configured in `Deploy.s.sol` through `guardLeg` (index into `legs`, or `type(uint256).max` for none) and `maxDeviationBps`.
 
-Testnet pools are not arbitraged: the WHBAR/USDC pool implies about $1.90 per HBAR against Chainlink's $0.10. The testnet deploy therefore leaves the guard off (`guardLeg: type(uint256).max`), and the Chainlink freshness check still gates every deposit and rebalance. A mainnet deploy turns it on, where arbitrage keeps the pool and the feed together:
+Testnet pools are not arbitraged: the WHBAR/USDC pool implies about $1.90 per HBAR against Chainlink's $0.10. The testnet deploy therefore leaves the guard off (`guardLeg: type(uint256).max`), and the Chainlink freshness check still gates every deposit and rebalance. The guard's refusal is on chain: vault D ([`0x2edbae1a...`](https://hashscan.io/testnet/contract/0x2edbae1a15efe7b26d7562ac2efc8c050f0cbfbb)), deployed with `GUARD_LEG=1 MAX_DEVIATION_BPS=300`, rejected a 1 HBAR deposit with `PoolPriceDeviates(187793712, 10199807)`: the pool implied $1.878 per HBAR, Chainlink $0.102, a 174,114 bps gap against the 300 bps limit ([transaction](https://hashscan.io/testnet/transaction/0x8557b8899218fb68030215740eaa9cf041a7a442d1468e5a095ada37c40ddd29)). A mainnet deploy turns it on, where arbitrage keeps the pool and the feed together:
 
 ```solidity
 guardLeg: 1,          // index of the USDC leg
