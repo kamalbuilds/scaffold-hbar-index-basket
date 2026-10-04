@@ -1,0 +1,184 @@
+vault 0xe72FbF68536D29d3A9e0D897C2aE813B7B279058  rpc https://testnet.hashio.io/api  acting as 0.0.4729347  write flags available (DEPLOYER_PRIVATE_KEY set)
+
+== get_basket_state
+Index Basket 0xe72FbF68536D29d3A9e0D897C2aE813B7B279058: NAV 13.38388879 HBAR ($1.36533278), 12.84967544 IBSK outstanding, $0.10625426 per share.
+WHBAR: 39.80% vs target 40.00% (drift -20 bps).
+SAUCE: 29.87% vs target 30.00% (drift -13 bps).
+USDC: 30.31% vs target 30.00% (drift +31 bps).
+Every leg is inside the 50 bps band.
+Next scheduled run in 261 min.
+Fuel 73.37088895 HBAR covers about 55 runs (13.75 days).
+Position of 0.0.4729347: 10.8867893 IBSK worth 11.33939747 HBAR.
+{
+  "status": "SUCCESS",
+  "vault": "0xe72FbF68536D29d3A9e0D897C2aE813B7B279058",
+  "owner": "0x1565aF2C2eF52b4A89180684a47C5260c716AbD1",
+  "navHbar": "13.38388879",
+  "navUsd": "1.36533278",
+  "hbarUsd": "0.10201316",
+  "sharePriceUsd": "0.10625426",
+  "oracle": {
+    "fresh": true,
+    "note": "Chainlink HBAR/USD is current."
+  },
+  "share": {
+    "token": "0x0000000000000000000000000000000000a56762",
+    "symbol": "IBSK",
+    "totalSupply": "12.84967544"
+  },
+  "weights": [
+    {
+      "token": "0x0000000000000000000000000000000000003aD2",
+      "symbol": "WHBAR",
+      "legIndex": null,
+      "balance": "5.327246",
+      "valueHbar": "5.327246",
+      "targetBps": 4000,
+      "actualBps": 3980,
+      "driftBps": -20,
+      "outsideBand": false
+    },
+    {
+      "token": "0x0000000000000000000000000000000000120f46",
+      "symbol": "SAUCE",
+      "legIndex": 0,
+      "balance": "156.207027",
+      "valueHbar": "3.99896786",
+      "targetBps": 3000,
+      "actualBps": 2987,
+      "driftBps": -13,
+      "outsideBand": false
+    },
+    {
+      "token": "0x0000000000000000000000000000000000001549",
+      "symbol": "USDC",
+      "legIndex": 1,
+      "balance": "7.513206",
+      "valueHbar": "4.05767493",
+      "targetBps": 3000,
+      "actualBps": 3031,
+      "driftBps": 31,
+      "outsideBand": false
+    }
+  ],
+  "driftBandBps": 50,
+  "needsRebalance": false,
+  "priceGuard": {
+    "enabled": false,
+    "maxDeviationBps": null
+  },
+  "automation": {
+    "automation": "on",
+    "intervalSeconds": 21600,
+    "pendingSchedule": "0x0000000000000000000000000000000000A5B211",
+    "nextRunAt": 1791150624,
+    "secondsUntil": 15666,
+    "status": "scheduled"
+  },
+  "fuel": {
+    "fuelHbar": "73.37088895",
+    "reservationHbar": "3.48",
+    "lastRunCostHbar": "1.28996442",
+    "runsCovered": 55,
+    "daysCovered": 13.75,
+    "basis": "last-run-cost"
+  },
+  "links": {
+    "vault": "https://hashscan.io/testnet/contract/0xe72FbF68536D29d3A9e0D897C2aE813B7B279058",
+    "shareToken": "https://hashscan.io/testnet/token/0.0.10839906",
+    "owner": "https://hashscan.io/testnet/account/0x1565aF2C2eF52b4A89180684a47C5260c716AbD1",
+    "pendingSchedule": "https://hashscan.io/testnet/schedule/0.0.10859025"
+  },
+  "position": {
+    "account": "0.0.4729347",
+    "evmAddress": "0x1565af2c2ef52b4a89180684a47c5260c716abd1",
+    "shares": "10.8867893",
+    "valueHbar": "11.33939747",
+    "valueUsd": "1.15676776",
+    "ofFundPercent": "84.7242"
+  }
+}
+
+== preview_deposit
+1 HBAR ($0.10201316) mints about 0.95834206 IBSK (simulated); floor 0.92959179 at 300 bps slippage.
+{
+  "status": "SUCCESS",
+  "hbar": "1",
+  "account": "0.0.4729347",
+  "estimatedShares": "0.96008534",
+  "simulatedShares": "0.95834206",
+  "minShares": "0.92959179",
+  "minSharesBasis": "eth_call of deposit",
+  "slippageBps": 300,
+  "priceImpactAndFeesBps": 18,
+  "valueUsd": "0.10201316",
+  "shareSymbol": "IBSK",
+  "canDeposit": true,
+  "blockers": [],
+  "links": {
+    "vault": "https://hashscan.io/testnet/contract/0xe72FbF68536D29d3A9e0D897C2aE813B7B279058"
+  }
+}
+
+== deposit_hbar (RETURN_BYTES, not sent)
+Unsigned ContractExecuteTransaction ready: 973 bytes, payer 0.0.4729347, valid until 2026-10-04T17:31:23.116Z. Not sent.
+{
+  "status": "SUCCESS",
+  "transactionId": "0.0.4729347@1791134963.116388798",
+  "payerAccountId": "0.0.4729347",
+  "type": "ContractExecuteTransaction",
+  "expiresAt": "2026-10-04T17:31:23.116Z",
+  "memo": "",
+  "plan": {
+    "account": "0.0.4729347",
+    "hbar": "1",
+    "minShares": "0.92959179",
+    "estimatedShares": "0.96008534",
+    "simulatedShares": "0.95834206"
+  }
+}
+
+== rebalance_now (RETURN_BYTES, not sent)
+Every leg is inside the 50 bps drift band; a rebalance would trade nothing. Pass force: true to send it anyway.
+{
+  "status": "SUCCESS",
+  "noop": true,
+  "reason": "Every leg is inside the 50 bps drift band; a rebalance would trade nothing. Pass force: true to send it anyway.",
+  "weights": [
+    {
+      "token": "0x0000000000000000000000000000000000003aD2",
+      "symbol": "WHBAR",
+      "legIndex": null,
+      "balance": "5.327246",
+      "valueHbar": "5.327246",
+      "targetBps": 4000,
+      "actualBps": 3980,
+      "driftBps": -20,
+      "outsideBand": false
+    },
+    {
+      "token": "0x0000000000000000000000000000000000120f46",
+      "symbol": "SAUCE",
+      "legIndex": 0,
+      "balance": "156.207027",
+      "valueHbar": "3.99896786",
+      "targetBps": 3000,
+      "actualBps": 2987,
+      "driftBps": -13,
+      "outsideBand": false
+    },
+    {
+      "token": "0x0000000000000000000000000000000000001549",
+      "symbol": "USDC",
+      "legIndex": 1,
+      "balance": "7.513206",
+      "valueHbar": "4.05767493",
+      "targetBps": 3000,
+      "actualBps": 3031,
+      "driftBps": 31,
+      "outsideBand": false
+    }
+  ]
+}
+
+Read-only run complete. Add --deposit 1, --redeem all, --rearm or --rebalance with DEPLOYER_PRIVATE_KEY set to send.

@@ -25,7 +25,7 @@ done
 
 ![Index Basket fund page on Hedera testnet: net asset value 12.3847 HBAR, share price $0.1058, Chainlink HBAR/USD $0.1020, and the target against actual bar at 40% WHBAR, 30% SAUCE, 30% USDC](docs/images/dashboard.png)
 
-**Contents:** [Five minutes](#see-it-work-in-five-minutes) | [Quickstart](#quickstart) | [How it works](#how-it-works) | [Proven on testnet](#proven-on-hedera-testnet) | [Customize](#customize) | [Deploy to mainnet](#deploy-to-mainnet) | [Testing](#testing) | [Troubleshooting](#troubleshooting) | [Documentation](#documentation)
+**Contents:** [Five minutes](#see-it-work-in-five-minutes) | [Quickstart](#quickstart) | [How it works](#how-it-works) | [Proven on testnet](#proven-on-hedera-testnet) | [Customize](#customize) | [Deploy to mainnet](#deploy-to-mainnet) | [Testing](#testing) | [AI agent](#operate-it-from-an-ai-agent) | [Troubleshooting](#troubleshooting) | [Documentation](#documentation)
 
 ## See it work in five minutes
 
@@ -376,6 +376,20 @@ bash scripts/gate.sh
 ```
 
 Scaffolds this template with `create-scaffold-hbar` into a temporary directory (from the committed HEAD, or from GitHub with `GATE_TEMPLATE=kamalbuilds/scaffold-hbar-index-basket`), then checks for committed secrets, runs `foundry:test`, `lint` and `next:build`, boots the app and requires HTTP 200 from `/`, `/debug` and `/blockexplorer`. `PM=npm bash scripts/gate.sh` runs it with npm. The same gate runs in `.github/workflows/scaffold-gate.yaml` for yarn and npm.
+
+## Operate it from an AI agent
+
+The fund runs itself on a Hedera schedule, and the `agent/` folder lets an AI agent operate it. It is a [Hedera Agent Kit](https://github.com/hashgraph/hedera-agent-kit-js) plugin with six tools: `get_basket_state` (NAV, drift against target, next run, fuel runway), `preview_deposit` (shares from a simulated deposit), `deposit_hbar`, `redeem_shares` (in kind, with skipped legs and an association check), `book_next_run` (rearm) and the owner-only `rebalance_now`. Inputs are zod schemas, results are structured with HashScan links, and each write proves its own post-condition from the `Deposited`, `Redeemed` or `Rebalanced` event and the balances behind it.
+
+```bash
+cd agent && npm install
+npm test                          # 77 tests, no network
+npx tsx examples/direct.ts                    # no LLM: read the live vault through the tools
+npx tsx examples/direct.ts --deposit 1     # with DEPLOYER_PRIVATE_KEY set: 1 HBAR through deposit_hbar
+OPENAI_API_KEY=... npx tsx examples/ask.ts "Is a rebalance due, and when does the fuel run out?"
+```
+
+**Proof:** `deposit_hbar` put 1 HBAR into vault C and received 0.95837174 IBSK, the amount `preview_deposit` simulated: [transaction on HashScan](https://hashscan.io/testnet/transaction/0.0.4729347-1791134539-501782816). `redeem_shares` approved and paid out in kind in [this redeem](https://hashscan.io/testnet/transaction/0.0.4729347-1791134640-646067407), and `rebalance_now` landed a `Rebalanced` event in [this transaction](https://hashscan.io/testnet/transaction/0.0.4729347-1791134715-292725423). The recorded read-only run is in [agent/examples/direct-readonly.txt](agent/examples/direct-readonly.txt) and the full write-up is [agent/README.md](agent/README.md).
 
 ## Extend it with Hedera Harness
 
