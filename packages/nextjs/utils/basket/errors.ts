@@ -12,6 +12,10 @@ const REVERT_TEXT: Record<string, string> = {
   AutomationActive: "Automation is already running. Stop it before starting with a new interval.",
   BadInterval: "Interval is outside the vault's allowed range.",
   ScheduleFailed: "Hedera refused to book the schedule. Check the vault's fuel balance.",
+  OnlyOwnerOrSelf: "Only the vault owner or the vault's own schedule can rebalance.",
+  NotAutomated: "Automation is off, so there is no run to book.",
+  RunAlreadyPending: "A run is already booked. Nothing to do.",
+  BadSkipMask: "That skip selection names a token the basket does not have.",
   OwnableUnauthorizedAccount: "Only the vault owner can do that.",
 };
 

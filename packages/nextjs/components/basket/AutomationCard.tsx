@@ -50,7 +50,7 @@ export function AutomationCard({ snap }: { snap: Snapshot }) {
     if (!lv.pendingSchedule) {
       return {
         text: "No run booked",
-        note: "Automation is on but Hedera has no pending schedule. The owner can restart it.",
+        note: "Automation is on but Hedera has no pending schedule. Anyone can book the next run below.",
         bad: true,
       };
     }
@@ -60,6 +60,15 @@ export function AutomationCard({ snap }: { snap: Snapshot }) {
       ? { text: `in ${fmtDuration(left)}`, note: fmtDateTime(lv.nextRunAt) }
       : { text: `${fmtDuration(-left)} past due`, note: "Waiting for the network to execute the schedule." };
   })();
+
+  const orphaned = on && !lv.pendingSchedule;
+  const rearm = () =>
+    tx.run([
+      {
+        id: "rearm",
+        send: () => tx.call({ address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "rearm" }, GAS_FLOOR.rearm),
+      },
+    ]);
 
   const rebalance = () =>
     tx.run([
@@ -126,11 +135,34 @@ export function AutomationCard({ snap }: { snap: Snapshot }) {
         </p>
       )}
 
+      {orphaned && (
+        <div className="mt-6 flex flex-col gap-3">
+          {!isOwner && Object.keys(tx.runs).length > 0 && (
+            <TxSteps steps={[{ id: "rearm", label: "Book the next run", needed: true }]} runs={tx.runs} />
+          )}
+          <WalletGate ready={ready}>
+            <button type="button" className="btn btn-primary w-full" disabled={tx.running} onClick={rearm}>
+              {tx.running ? "Working" : "Book the next run"}
+            </button>
+          </WalletGate>
+          <p className="m-0 text-xs text-base-content/70">
+            Any connected wallet can press this. The vault pays for the booking from its own fuel, not you; you only pay
+            the transaction fee.
+          </p>
+        </div>
+      )}
+
       {isOwner && (
         <>
           <div className="mt-6 flex flex-col gap-4">
             {Object.keys(tx.runs).length > 0 && (
-              <TxSteps steps={[{ id: "rebalance", label: "Rebalance", needed: true }]} runs={tx.runs} />
+              <TxSteps
+                steps={[
+                  { id: "rebalance", label: "Rebalance", needed: true },
+                  { id: "rearm", label: "Book the next run", needed: true },
+                ].filter(step => step.id in tx.runs)}
+                runs={tx.runs}
+              />
             )}
             {lv.hbarUsd === undefined && (
               <p className="m-0 text-sm text-warning">Rebalancing waits for a fresh Chainlink answer.</p>

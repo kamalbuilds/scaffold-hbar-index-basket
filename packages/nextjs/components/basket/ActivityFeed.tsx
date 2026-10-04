@@ -18,6 +18,8 @@ const FAILURES = new Set(["ScheduledRunFailed", "BookingFailed"]);
 const KINDS: Record<string, string> = {
   Deposited: "Deposit",
   Redeemed: "Redeem",
+  LegsSkipped: "Token skipped",
+  ScheduleDeleted: "Schedule deleted",
   Swapped: "Swap",
   Rebalanced: "Rebalance",
   RunBooked: "Run booked",
@@ -61,6 +63,36 @@ function describe(ev: VaultEvent, snap: Snapshot): React.ReactNode {
         ),
       ];
       return `${shortAddress(a.account)} redeemed ${fmtUnits(a.shares, SHARE_DECIMALS, 4)} ${share} for ${parts.join(", ")}`;
+    }
+    case "LegsSkipped": {
+      const names = tokens
+        .slice(1)
+        .filter((_, i) => (BigInt(a.skipLegsMask) >> BigInt(i)) & 1n)
+        .map(t => t.symbol);
+      return `${shortAddress(a.account)} skipped ${names.length ? names.join(", ") : "a token"} in a redemption. That share stays in the vault for the remaining holders.`;
+    }
+    case "ScheduleDeleted": {
+      const code = Number(a.responseCode);
+      const outcome =
+        code === 22
+          ? "The pending run was cancelled."
+          : [201, 212, 213].includes(code)
+            ? "The schedule had already run, expired or been deleted."
+            : `Hedera answered with response code ${code}.`;
+      return (
+        <>
+          Schedule{" "}
+          <a
+            className="link link-primary -my-2 inline-block py-2"
+            href={hashscan.schedule(a.schedule)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {evmToEntityId(a.schedule)}
+          </a>{" "}
+          removed when automation stopped. {outcome}
+        </>
+      );
     }
     case "Swapped":
       return `Swapped ${tok(a.tokenIn, a.amountIn)} for ${tok(a.tokenOut, a.amountOut)}`;

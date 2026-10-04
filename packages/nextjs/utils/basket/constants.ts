@@ -47,6 +47,7 @@ export const GAS_FLOOR = {
   deposit: 4_000_000n,
   redeem: 3_000_000n,
   rebalance: 4_000_000n,
+  rearm: 2_000_000n, // scheduleCall reserves ~1.4M
   startAutomation: 3_000_000n,
   stopAutomation: 500_000n, // measured 99,452 on testnet, including deleteSchedule
   withdrawFuel: 200_000n, // measured 31,143
