@@ -255,6 +255,59 @@ forge test            # 148 tests passed across 11 suites
 
 The suite was mutation-checked with 18 deliberate changes to the contract, each turning at least one test red, and the contract was restored byte for byte after each: caller gate removed, skip mask ignored, `rearm` guards removed, jitter removed, capacity probe cut back to 16 seconds, factory check removed, trade cap removed on sell and on buy, `deleteSchedule` result dropped, constructor checks removed.
 
+## 8. Price guard refusing a manipulated-looking pool
+
+The testnet SaucerSwap pools are not arbitraged. The WHBAR/USDC pool prices HBAR at about $1.88 while Chainlink reads $0.102, which is what a manipulated pool looks like to a vault. Vault C runs with the guard off so that its deposits and rebalances trade on this pool. Vault D is the same `BasketVault` deployed with the guard on: `GUARD_LEG=1` (the USDC leg) and `MAX_DEVIATION_BPS=300`, both read by `Deploy.s.sol` and defaulting to off.
+
+| Step | What it proves | Gas | Fee (HBAR) | Link |
+| --- | --- | --- | --- | --- |
+| Deploy vault D (0.0.10858261) with `GUARD_LEG=1 MAX_DEVIATION_BPS=300` | The constructor accepts the armed guard: `guardLeg` 1 is a valid leg index and 300 bps is inside `(0, 10000)` | 3,876,644 | 3.2176 | [tx](https://hashscan.io/testnet/transaction/0x4657673bfaeef1dc6b5ca6de3531862cc3a0156a787d21e9d16e1eb17fc1aa6d) |
+| `initialize` with 30 HBAR | Same setup as vault C: three associations and the IBSK share token (0.0.10858263) in one call | 2,319,221 | 13.6511 | [tx](https://hashscan.io/testnet/transaction/0x3fd26ad77c975347cc6063f0d69e9db0e651b933250bb1f1439a13460ed9228b) |
+| Owner associates IBSK | The depositor is ready to receive shares, so the only thing between 1 HBAR and a share is the guard | 726,488 | 0.6030 | [tx](https://hashscan.io/testnet/transaction/0x069518479fb6f00229d952a779344b2a20bcf7cc9e52364275419ed32d9bbb64) |
+| `deposit(1)` with 1 HBAR, gas limit 4,000,000 | The guard refuses: `CONTRACT_REVERT_EXECUTED` with `PoolPriceDeviates(187793712, 10199807)`. The pool implies $1.87793712 per HBAR, Chainlink says $0.10199807 (both USD with 8 decimals), a gap of 174,114 bps against the 300 bps limit. Reverted at 70,195 gas, no share minted, the 1 HBAR returned | 70,195 | 0.0592 | [tx](https://hashscan.io/testnet/transaction/0x8557b8899218fb68030215740eaa9cf041a7a442d1468e5a095ada37c40ddd29) |
+
+An explicit gas limit makes the network accept and record the failed call instead of rejecting it at estimation, so the refusal is a transaction on the ledger, in block 41350278 at consensus 1791124561.908399104.
+
+```bash
+D=0x2edbae1a15efe7b26d7562ac2efc8c050f0cbfbb       # vault D, contract 0.0.10858261
+R=0x8557b8899218fb68030215740eaa9cf041a7a442d1468e5a095ada37c40ddd29
+
+# the guard is armed on vault D
+cast call $D "guardLeg()(uint256)" --rpc-url $RPC | n          # 1
+cast call $D "maxDeviationBps()(uint256)" --rpc-url $RPC | n   # 300
+
+# the refusal as the mirror recorded it, then its error decoded
+curl -s $M/contracts/results/$R | jq -c '{result,gas_used,gas_limit,block_number,error_message}'
+cast sig "PoolPriceDeviates(uint256,uint256)"                    # 0xbc2c7907
+E=$(curl -s $M/contracts/results/$R | jq -r .error_message)
+cast decode-error $E --sig "PoolPriceDeviates(uint256,uint256)"  # 187793712 then 10199807
+
+# the same deposit sent as a call reverts with the same selector right now
+cast call $D "deposit(uint256)" 1 --value 1ether --from $OWNER_EOA --rpc-url $RPC
+
+# the oracle side of the comparison
+cast call $D "hbarUsd()(uint256)" --rpc-url $RPC | n             # 10199807
+```
+
+`OWNER_EOA` is `0x1565aF2C2eF52b4A89180684a47C5260c716AbD1`. Vault D holds no basket value, so the guard is the whole story of that deployment. Vault C is untouched and keeps trading on the same pool with the guard off.
+
+## 9. Source verified on Sourcify
+
+Vault C is verified on Sourcify (chain 296) with an `exact_match` on the runtime bytecode, submitted with `forge verify-contract 0xe72FbF68536D29d3A9e0D897C2aE813B7B279058 contracts/BasketVault.sol:BasketVault --chain-id 296 --verifier sourcify` (the `foundry:verify:testnet` script), verified at 2026-10-04T14:33:25Z.
+
+```bash
+curl -s https://sourcify.dev/server/v2/contract/296/$V | jq '{match,runtimeMatch,verifiedAt}'
+# {"match":"exact_match","runtimeMatch":"exact_match","verifiedAt":"2026-10-04T14:33:25Z"}
+```
+
+## 10. One command re-checks every claim
+
+```bash
+bash scripts/verify-evidence.sh
+```
+
+It reads the chain and prints `PASS` or `FAIL` per row, and exits 1 when any row fails. It needs `curl`, `jq` and `cast`, reads public endpoints only, and holds no key. Rows: vault C bytecode size (16,573 bytes), `owner()`, IBSK supply read from the mirror and from the EVM (they agree), the 100,000 dead shares, every `ScheduledRun` log sitting in a `scheduled=true` `SUCCESS` transaction (10 of 10, four of them trades), the Sourcify match, vault D's armed guard, the recorded refusal decoded to `PoolPriceDeviates`, and a live `eth_call` of the same deposit reverting with the same selector. Each expectation is an environment override (`EXPECT_CODE_BYTES`, `EXPECT_OWNER`, `MIN_SCHEDULED`, `EXPECT_GUARD_BPS`, `REFUSED_TX`), so a wrong expectation turns its row `FAIL`: with `EXPECT_CODE_BYTES=16574 MIN_SCHEDULED=11 EXPECT_GUARD_BPS=301` three rows fail and the exit status is 1.
+
 ## Earlier deployments: vault B and vault A
 
 Vault B and vault A are earlier deployments of the same design. Their transactions evidence the same Hedera mechanics: HTS share mint and burn, in-kind payouts, SaucerSwap V2 swaps and HIP-1215 self-scheduling. Vault B was retired after vault C: `stopAutomation` (99,452 gas, [tx](https://hashscan.io/testnet/transaction/0xcd5f947584a397c1d74ec27aa82682f1b0dea19a5f045a4810debb68449f10ff)) deleted schedule 0.0.10837952, after which `rebalanceInterval()` reads 0 and `pendingSchedule()` reads address(0), and `withdrawFuel` (31,167 gas, [tx](https://hashscan.io/testnet/transaction/0x220c9761474f9b4fdc90766a407b5949182460b1b742ab60e90843737b4748e7)) returned 82.5599 HBAR to the deployer. The commands in this part use `$VB`, `$VBID` and `$SHAREB`.

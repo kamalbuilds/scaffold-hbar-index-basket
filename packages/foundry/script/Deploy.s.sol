@@ -9,6 +9,8 @@ import { BasketVault } from "../contracts/BasketVault.sol";
 /// DRIFT_BPS (env, default 500) sets how far a leg may drift from its weight before a rebalance trades.
 /// MAX_TRADE_BPS (env, default 2000) caps one rebalance swap at that share of NAV. The constructor checks every
 /// leg's pool against the factory, so a pool the factory does not know cannot be deployed.
+/// GUARD_LEG (env, default off) is the index of the stablecoin leg whose pool price is checked against Chainlink on
+/// every deposit and rebalance; MAX_DEVIATION_BPS (env, default 0) is how far the two may differ. Set both to arm it.
 contract DeployScript is ScaffoldETHDeploy {
     function run() external ScaffoldEthDeployerRunner {
         BasketVault.LegConfig[] memory legs = new BasketVault.LegConfig[](2);
@@ -35,8 +37,8 @@ contract DeployScript is ScaffoldETHDeploy {
                 slippageBps: 300,
                 maxTradeBps: vm.envOr("MAX_TRADE_BPS", uint256(2000)),
                 scheduledGas: 4_000_000,
-                guardLeg: type(uint256).max,
-                maxDeviationBps: 0
+                guardLeg: vm.envOr("GUARD_LEG", type(uint256).max),
+                maxDeviationBps: vm.envOr("MAX_DEVIATION_BPS", uint256(0))
             }),
             legs
         );
