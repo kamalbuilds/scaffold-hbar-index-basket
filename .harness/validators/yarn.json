@@ -1,0 +1,20 @@
+{
+  "name": "third-basket-leg-yarn",
+  "description": "The whole suite and lints still pass, then the checks that the new leg is real: configured, factory-verified, associated by the live script, tested at three legs, documented, and the UI and contract untouched. Nothing here needs a secret; factory-pool reads the testnet RPC (HEDERA_RPC_URL overrides Hashio).",
+  "requiresNoSecrets": true,
+  "forbiddenCommands": ["npm install", "npm run", "pnpm install", "pnpm run"],
+  "commands": [
+    { "name": "install", "command": "yarn install", "timeoutMs": 600000, "purpose": "Install workspace dependencies." },
+    { "name": "contracts-test", "command": "yarn foundry:test", "timeoutMs": 300000, "purpose": "The whole offline suite, new tests included." },
+    { "name": "contracts-lint", "command": "yarn foundry:lint", "timeoutMs": 180000, "purpose": "forge fmt --check on the new test and script." },
+    { "name": "app-lint", "command": "yarn next:lint", "timeoutMs": 180000, "purpose": "Lint the app." },
+    { "name": "app-types", "command": "yarn next:check-types", "timeoutMs": 300000, "purpose": "Strict type check of the app." },
+    { "name": "deploy-legs", "command": "node .harness/validators/check.mjs deploy-legs", "timeoutMs": 60000, "purpose": "At least three legs, old two kept, weights under 10000, the NatSpec percentages match." },
+    { "name": "factory-pool", "command": "node .harness/validators/check.mjs factory-pool", "timeoutMs": 240000, "purpose": "Each pool is factory.getPool(token, WHBAR, fee) on the RPC, pairs the token with WHBAR and has liquidity." },
+    { "name": "live-script", "command": "node .harness/validators/check.mjs live-script", "timeoutMs": 60000, "purpose": "live-testnet.sh associates every leg token." },
+    { "name": "third-leg-test", "command": "node .harness/validators/check.mjs third-leg-test", "timeoutMs": 240000, "purpose": "BasketVaultThirdLeg.t.sol runs at least two tests, all green, one on deposit and one on redeem." },
+    { "name": "docs-counts", "command": "node .harness/validators/check.mjs docs-counts", "timeoutMs": 240000, "purpose": "README and AGENTS print the test and suite totals forge reports." },
+    { "name": "ui-generic", "command": "node .harness/validators/check.mjs ui-generic", "timeoutMs": 60000, "purpose": "No token symbol, leg address, fixed leg index or leg count in the fund UI." },
+    { "name": "protected-paths", "command": "node .harness/validators/check.mjs protected-paths", "timeoutMs": 60000, "purpose": "BasketVault.sol and the existing tests are unchanged." }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "name": "third-basket-leg-static",
+  "description": "The third leg is configured in Deploy.s.sol, covered by its own Foundry suite, and the fund UI still builds its rows from the vault. No env files.",
+  "jsonAssertions": [
+    { "file": "package.json", "path": "name", "equals": "scaffold-hbar-index-basket" },
+    { "file": "package.json", "path": "packageManager", "equals": "yarn@3.2.3" }
+  ],
+  "fileAssertions": {
+    "required": [
+      "README.md",
+      "AGENTS.md",
+      ".harness/spec.yaml",
+      ".harness/prd.md",
+      "packages/foundry/contracts/BasketVault.sol",
+      "packages/foundry/script/Deploy.s.sol",
+      "packages/foundry/script/live-testnet.sh",
+      "packages/foundry/test/BasketVaultThirdLeg.t.sol"
+    ],
+    "forbidden": [".env", "packages/nextjs/.env"]
+  },
+  "textAssertions": [
+    {
+      "file": "packages/foundry/script/Deploy.s.sol",
+      "contains": ["BasketVault.LegConfig[](3)", "legs[2]", "guardLeg: type(uint256).max"]
+    },
+    {
+      "file": "packages/foundry/test/BasketVaultThirdLeg.t.sol",
+      "contains": [
+        "contract BasketVaultThirdLegTest is BasketVaultBase",
+        "BasketVault.LegConfig[](3)",
+        "vault.holdings()",
+        "targetBps",
+        "_redeem(",
+        "_deposit("
+      ]
+    },
+    {
+      "file": "packages/nextjs/components/basket/CompositionBar.tsx",
+      "contains": ["lv.holdings.map", "cfg.tokens[index]"]
+    },
+    {
+      "file": "packages/nextjs/components/basket/RedeemPanel.tsx",
+      "contains": ["cfg.tokens.length - 1", "lv.holdings.map"]
+    },
+    {
+      "file": "packages/nextjs/hooks/basket/useVault.ts",
+      "contains": ["functionName: \"holdings\""]
+    }
+  ]
+}

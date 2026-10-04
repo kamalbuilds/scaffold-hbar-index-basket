@@ -1,0 +1,34 @@
+schemaVersion: 2
+
+name: third-basket-leg
+description: >-
+  Add a third token leg to the Index Basket: an HTS token with a SaucerSwap V2
+  pool against WHBAR that the factory vouches for, wired through Deploy.s.sol,
+  live-testnet.sh and a new Foundry suite. BasketVault.sol and the fund UI do
+  not change. Follow AGENTS.md.
+
+agent: claude
+
+baseline:
+  commands:
+    - name: install
+      command: yarn install
+      timeoutMs: 600000
+    - name: contracts-test
+      command: yarn foundry:test
+      timeoutMs: 300000
+    - name: app-types
+      command: yarn next:check-types
+      timeoutMs: 300000
+
+# yarn install runs foundry's postinstall, which copies .env.example to
+# packages/foundry/.env (gitignored). The default file check would flag that
+# file on a healthy checkout, so only the files that should never exist are
+# forbidden. The content scan for private-key assignments still runs.
+forbiddenFiles:
+  - .env
+  - packages/nextjs/.env
+secretScan:
+  failOnFiles:
+    - .env
+    - packages/nextjs/.env
