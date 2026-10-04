@@ -46,5 +46,8 @@ jobs:
       - name: Check typings on nextjs
         run: yarn next:check-types
 
+      - name: Frontend unit tests
+        run: yarn workspace @sh/nextjs test
+
       - name: Build the app
         run: yarn next:build

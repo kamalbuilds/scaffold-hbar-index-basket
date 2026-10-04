@@ -7,16 +7,9 @@ import { formatUnits } from "viem";
 import { useAssociations } from "~~/hooks/basket/useAssociations";
 import { type RunnableStep, useTx, useWalletReady } from "~~/hooks/basket/useTx";
 import type { Snapshot } from "~~/hooks/basket/useVault";
-import {
-  BPS,
-  DEFAULT_SLIPPAGE_BPS,
-  GAS_FLOOR,
-  SHARE_DECIMALS,
-  VAULT_ABI,
-  VAULT_ADDRESS,
-  WEIBAR_PER_TINYBAR,
-} from "~~/utils/basket/constants";
+import { DEFAULT_SLIPPAGE_BPS, GAS_FLOOR, SHARE_DECIMALS, VAULT_ABI, VAULT_ADDRESS } from "~~/utils/basket/constants";
 import { fmtUnits, fmtUsd, parseAmount } from "~~/utils/basket/format";
+import { estimateShares, hbarToUsd8, minSharesFor, tinybarToWeibar, weibarToTinybar } from "~~/utils/basket/math";
 
 const SLIPPAGE_CHOICES = [100, 300, 500];
 
@@ -31,29 +24,20 @@ export function DepositPanel({ snap }: { snap: Snapshot }) {
   const [shareAssoc] = useAssociations(ready.address, cfg.shareToken ? [cfg.shareToken] : []);
 
   const tiny = parseAmount(amount, 8);
-  const weibar = tiny === null ? null : tiny * WEIBAR_PER_TINYBAR;
+  const weibar = tiny === null ? null : tinybarToWeibar(tiny);
   const gasPrice = vault.gasPrice.data;
   const reserve = gasPrice !== undefined ? GAS_FLOOR.deposit * gasPrice : undefined;
   const walletBalance = vault.wallet.data?.value;
   const maxTiny =
     walletBalance !== undefined && reserve !== undefined && walletBalance > reserve
-      ? (walletBalance - reserve) / WEIBAR_PER_TINYBAR
+      ? weibarToTinybar(walletBalance - reserve)
       : 0n;
 
   // Shares are value added x supply / NAV, and the first deposit mints 1 share unit per tinybar of value.
   const firstDeposit = lv.supply === 0n;
-  const estShares =
-    tiny === null || tiny === 0n
-      ? null
-      : firstDeposit
-        ? tiny > cfg.deadShares
-          ? tiny - cfg.deadShares
-          : 0n
-        : lv.nav > 0n
-          ? (tiny * lv.supply) / lv.nav
-          : null;
-  const minShares = estShares === null ? null : (estShares * (BPS - BigInt(slippageBps))) / BPS;
-  const usd = tiny !== null && lv.hbarUsd !== undefined ? (tiny * lv.hbarUsd) / 10n ** 8n : undefined;
+  const estShares = estimateShares(tiny, lv.supply, lv.nav, cfg.deadShares);
+  const minShares = estShares === null ? null : minSharesFor(estShares, slippageBps);
+  const usd = tiny !== null && lv.hbarUsd !== undefined ? hbarToUsd8(tiny, lv.hbarUsd) : undefined;
 
   const assocKnown =
     shareAssoc?.state.kind === "associated" || shareAssoc?.state.kind === "auto" || shareAssoc?.state.kind === "needs";

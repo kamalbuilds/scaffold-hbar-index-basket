@@ -12,20 +12,18 @@ import { CpPool } from "./mocks/CpAmm.sol";
 /// distorted NAV, moves the pool back and redeems in kind. Every swap moves the price and charges the pool fee, so the
 /// attacker pays for both legs of the move. The attacker's wealth is valued at the pre-attack reserves, in WHBAR tinybar,
 /// and includes native HBAR, so a profit anywhere in the round trip shows up as a positive difference.
-contract BasketVaultDepositSandwichTest is CpFixture {
+abstract contract DepositSandwichHarness is CpFixture {
     /// Arbitrary pool-trading budget minted to the attacker. It counts on both sides of the profit, so it cancels.
-    uint256 private constant BUDGET = 1_000_000 * HBAR;
-    uint256 private constant BUDGET_TOKENS = 1e15;
+    uint256 internal constant BUDGET = 1_000_000 * HBAR;
+    uint256 internal constant BUDGET_TOKENS = 1e15;
 
-    uint256 private refSauce0;
-    uint256 private refSauce1;
-    uint256 private refUsdc0;
-    uint256 private refUsdc1;
+    uint256 internal refSauce0;
+    uint256 internal refSauce1;
+    uint256 internal refUsdc0;
+    uint256 internal refUsdc1;
 
-    function setUp() public {
-        // A 200k HBAR vault in 2M HBAR pools: the fixture the teardown probed. A deposit of 200k HBAR or more reverts
-        // on the 3% slippage floor, so the sweeps stop at 150k.
-        _build(200_000, 10_000);
+    /// Takes the pools as they stand now as the pre-attack market price the attacker's wealth is valued at.
+    function _snapRefs() internal {
         (refSauce0, refSauce1) = (saucePool.r0(), saucePool.r1());
         (refUsdc0, refUsdc1) = (usdcPool.r0(), usdcPool.r1());
     }
@@ -94,6 +92,15 @@ contract BasketVaultDepositSandwichTest is CpFixture {
 
         uint256 afterValue = _valueAtRef(attacker);
         profit = SafeCast.toInt256(afterValue) - SafeCast.toInt256(before);
+    }
+}
+
+contract BasketVaultDepositSandwichTest is DepositSandwichHarness {
+    function setUp() public {
+        // A 200k HBAR vault in 2M HBAR pools: the fixture the teardown probed. A deposit of 200k HBAR or more reverts
+        // on the 3% slippage floor, so the sweeps stop at 150k.
+        _build(200_000, 10_000);
+        _snapRefs();
     }
 
     /// Fuzzes the pool, the direction, the move size (0.5% to 15% of the reserve it trades into) and the deposit size

@@ -8,6 +8,7 @@ import { type RunnableStep, useTx, useWalletReady } from "~~/hooks/basket/useTx"
 import type { Snapshot } from "~~/hooks/basket/useVault";
 import { ERC20_ABI, GAS_FLOOR, SHARE_DECIMALS, VAULT_ABI, VAULT_ADDRESS } from "~~/utils/basket/constants";
 import { fmtUnits, fmtUsd, parseAmount } from "~~/utils/basket/format";
+import { hbarToUsd8, isPaidOut, redeemPayout, redeemPayoutWhbar, skipMaskOf } from "~~/utils/basket/math";
 
 export function RedeemPanel({ snap }: { snap: Snapshot }) {
   const { vault, cfg, lv } = snap;
@@ -22,8 +23,8 @@ export function RedeemPanel({ snap }: { snap: Snapshot }) {
   );
 
   const legCount = cfg.tokens.length - 1;
-  const skipMask = cfg.tokens.slice(1).reduce((mask, _, i) => (skipped[i] ? mask | (1n << BigInt(i)) : mask), 0n);
-  const paidOut = (tokenIndex: number) => tokenIndex === 0 || !skipped[tokenIndex - 1];
+  const skipMask = skipMaskOf(skipped, legCount);
+  const paidOut = (tokenIndex: number) => isPaidOut(skipped, tokenIndex);
 
   const balance = vault.shares.data?.balance;
   const allowance = vault.shares.data?.allowance;
@@ -31,20 +32,10 @@ export function RedeemPanel({ snap }: { snap: Snapshot }) {
   const valid = shares !== null && shares > 0n && balance !== undefined && shares <= balance;
 
   // In-kind payout: the same fraction of every token the vault holds as the fraction of supply being burned.
-  const payout =
-    shares !== null && lv.supply > 0n
-      ? lv.holdings.map((h, i) => ({
-          token: cfg.tokens[i],
-          amount: (h.balance * shares) / lv.supply,
-          skipped: !paidOut(i),
-        }))
-      : null;
-  const payoutWhbar =
-    shares !== null && lv.supply > 0n
-      ? lv.holdings.reduce((sum, h, i) => (paidOut(i) ? sum + (h.valueWhbar * shares) / lv.supply : sum), 0n)
-      : null;
-  const payoutUsd =
-    payoutWhbar !== null && lv.hbarUsd !== undefined ? (payoutWhbar * lv.hbarUsd) / 10n ** 8n : undefined;
+  const payoutRows = shares !== null ? redeemPayout(lv.holdings, shares, lv.supply, skipped) : null;
+  const payout = payoutRows?.map((row, i) => ({ token: cfg.tokens[i], ...row })) ?? null;
+  const payoutWhbar = shares !== null ? redeemPayoutWhbar(lv.holdings, shares, lv.supply, skipped) : null;
+  const payoutUsd = payoutWhbar !== null && lv.hbarUsd !== undefined ? hbarToUsd8(payoutWhbar, lv.hbarUsd) : undefined;
 
   const paid = associations.filter((_, i) => paidOut(i));
   const unknown = paid.find(a => a.state.kind === "unknown");
