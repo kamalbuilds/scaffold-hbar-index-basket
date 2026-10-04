@@ -38,7 +38,7 @@ README and AGENTS). No coding agent ran.
 
 | Copy | Result | Detail |
 | --- | --- | --- |
-| Template as committed | `passed=false`, `findings=6` | The new suite and the third leg are absent (4 static findings, plus `deploy-legs` and `third-leg-test`). `yarn install`, `foundry:test` (148 tests), `foundry:lint`, `next:lint`, `next:check-types`, `factory-pool`, `live-script`, `docs-counts`, `ui-generic` and `protected-paths` all exit 0, so none of the 6 is a false alarm. |
+| Template as committed | `passed=false`, `findings=6` | The new suite and the third leg are absent (4 static findings, plus `deploy-legs` and `third-leg-test`). `yarn install`, `foundry:test` (157 tests, 1 skipped), `foundry:lint`, `next:lint`, `next:check-types`, `factory-pool`, `live-script`, `docs-counts`, `ui-generic` and `protected-paths` all exit 0, so none of the 6 is a false alarm. |
 | Template with the reference | `passed=true`, `findings=0` | 150 tests across 12 suites, the two new tests green, all three factory pools verified on the RPC, lint, types and the UI check clean. |
 
 Each check also goes red when the rule it guards is broken. Ten deliberate

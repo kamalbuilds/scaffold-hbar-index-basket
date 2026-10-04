@@ -8,6 +8,19 @@ npm create scaffold-hbar@latest -- --template kamalbuilds/scaffold-hbar-index-ba
 
 The `--` matters with `npm create`: without it npm keeps `--template` for itself. `npx create-scaffold-hbar@latest --template kamalbuilds/scaffold-hbar-index-basket` is equivalent.
 
+**10 rebalance runs executed by the Hedera network on the vault's own schedule, 4 of them traded, 0 triggered by a person.** Read from the mirror node on 2026-10-04 14:48 UTC (block 41350655) for vault C `0xe72FbF68536D29d3A9e0D897C2aE813B7B279058` (contract 0.0.10839904). Every one is a `CONTRACTCALL` with `scheduled: true`. Recount it:
+
+```bash
+V=0xe72FbF68536D29d3A9e0D897C2aE813B7B279058; H=https://testnet.mirrornode.hedera.com; M=$H/api/v1
+T=$(cast keccak "ScheduledRun(bool)"); u="$M/contracts/$V/results/logs?order=asc&limit=100"
+while [ -n "$u" ]; do
+  p=$(curl -s "$u"); echo "$p" | jq -r --arg t "$T" '.logs[]|select(.topics[0]==$t)|"\(.timestamp) \(.data[-1:])"'
+  n=$(echo "$p" | jq -r '.links.next // empty'); u=${n:+$H$n}
+done | while read ts f; do
+  echo "$ts traded=$f scheduled=$(curl -s "$M/transactions?timestamp=$ts" | jq -r '.transactions[0].scheduled')"
+done
+```
+
 **Live app:** [index-basket-hbar.vercel.app](https://index-basket-hbar.vercel.app) reads the canonical vault on Hedera testnet: NAV, target against actual weights, automation runway and the activity feed. Connect a wallet to deposit or redeem.
 
 ![Index Basket fund page on Hedera testnet: net asset value 12.3847 HBAR, share price $0.1058, Chainlink HBAR/USD $0.1020, and the target against actual bar at 40% WHBAR, 30% SAUCE, 30% USDC](docs/images/dashboard.png)
@@ -44,7 +57,7 @@ The `--` matters with `npm create`: without it npm keeps `--template` for itself
 - Pricing a basket from SaucerSwap V2 pool state and Chainlink HBAR/USD.
 - Reading contract events from the mirror node instead of `eth_getLogs`.
 
-What a reader gets from the scaffold: one Solidity contract that holds all the vault logic, 148 Foundry tests that need no network, a Next.js fund page (live NAV, target against actual weights, deposit, redeem, automation runway), a script that runs every flow on testnet and prints a HashScan link per transaction, and [AGENTS.md](AGENTS.md) for coding agents.
+What a reader gets from the scaffold: one Solidity contract that holds all the vault logic, 157 Foundry tests that need no network, a Next.js fund page (live NAV, target against actual weights, deposit, redeem, automation runway), a script that runs every flow on testnet and prints a HashScan link per transaction, and [AGENTS.md](AGENTS.md) for coding agents.
 
 ## Why it needs SaucerSwap, Chainlink, HTS and HSS
 
@@ -348,9 +361,11 @@ AGENTS.md                            briefing for coding agents (CLAUDE.md loads
 yarn foundry:test
 ```
 
-148 tests across 11 suites, none needing a network: constructor and initialize (34), deposit and redeem (29), rebalance, guard and views (28), automation (39), frozen leg and `redeemExcept` (10), sandwich regression on constant-product pools (4), trade cap (4). They include a fuzz test that a deposit-redeem round trip never pays out more than went in. `BasketVaultBase.sol` etches HTS, HSS, SaucerSwap router and pool mocks and a Chainlink feed mock at the addresses the contract calls, so `BasketVault` runs unmodified.
+157 tests pass and 1 is skipped across 14 suites, none needing a network: constructor and initialize (34), deposit and redeem (29), rebalance, guard and views (28), automation (39), frozen leg and `redeemExcept` (10), sandwich regression on constant-product pools (4), trade cap (4), deposit sandwich regression (2), invariants (7). They include a fuzz test that a deposit-redeem round trip never pays out more than went in. `BasketVaultBase.sol` etches HTS, HSS, SaucerSwap router and pool mocks and a Chainlink feed mock at the addresses the contract calls, so `BasketVault` runs unmodified.
 
-The suite was mutation-checked: 18 deliberate bugs (caller gate removed, skip mask ignored, `rearm` guards removed, jitter removed, probe cut back to 16 seconds, factory check removed, trade cap removed on sell and on buy, `deleteSchedule` result dropped, constructor checks removed) were each caught by at least one test.
+The suite was mutation-checked: 18 deliberate bugs from the audit fixes (caller gate removed, skip mask ignored, `rearm` guards removed, jitter removed, probe cut back to 16 seconds, factory check removed, trade cap removed on sell and on buy, `deleteSchedule` result dropped, constructor checks removed) were each caught by at least one test.
+
+`BasketVaultInvariant.t.sol` holds 6 invariants at 256 runs x 80 depth. `BasketVaultDepositSandwich.t.sol` fuzzes the deposit sandwich and replays a 50-configuration grid whose best attacker result is -219 HBAR on a 200,000 HBAR vault. Those two suites were mutation-checked separately with 8 further mutations, each caught.
 
 `yarn foundry:test:testnet` runs the suite against a fork of Hedera testnet.
 

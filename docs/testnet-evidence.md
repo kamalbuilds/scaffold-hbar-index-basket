@@ -175,6 +175,17 @@ curl -s "$M/transactions?account.id=$VID&timestamp=gte:1791020000&timestamp=lte:
   jq -r '.transactions[]|select(.scheduled==true)|"\(.consensus_timestamp) \(.name) \(.result) fee=\(.charged_tx_fee)"'
 ```
 
+### Ten scheduled runs in total, four of them trades
+
+Read from the mirror node on 2026-10-04 14:48 UTC (block 41350655): vault C holds 10 `ScheduledRun(bool)` events, 4 with `traded=true`, and every one of the 10 transactions is `scheduled: true` with result `SUCCESS`. The README carries the command that recounts it. One row per traded run, with the swap from its `Swapped` event:
+
+| Run | Consensus timestamp | Swapped | Charged to the vault (HBAR) | Link |
+| --- | --- | --- | --- | --- |
+| 1 | 1791020419.010852853 | 0.129039 USDC for 0.0699529 WHBAR | 1.9920 | [tx](https://hashscan.io/testnet/transaction/1791020419.010852853) |
+| 2 | 1791020800.024519104 | 0.0721512 WHBAR for 0.136961 USDC | 1.3964 | [tx](https://hashscan.io/testnet/transaction/1791020800.024519104) |
+| 3 | 1791085787.032725208 | 0.403921 USDC for 0.21396166 WHBAR | 1.3798 | [tx](https://hashscan.io/testnet/transaction/1791085787.032725208) |
+| 4 | 1791107406.020254208 | 0.06232884 WHBAR for 2.427465 SAUCE | 1.3820 | [tx](https://hashscan.io/testnet/transaction/1791107406.020254208) |
+
 `RunBooked` lists every schedule the vault has booked: id, and the second it will run. Each execution books exactly one successor, so a run never books twice:
 
 ```bash
@@ -243,17 +254,19 @@ At the last read the interval is 21600 seconds, the next run is 1791042569 with 
 
 ## 7. Contract tests and mutations
 
-The Foundry suite has 148 tests across 11 suites and needs no network. The sandwich regression runs on constant-product pools:
+The Foundry suite has 157 passing tests, 1 skipped, across 14 suites and needs no network. The sandwich regression runs on constant-product pools:
 
 ```bash
 cd packages/foundry
 forge test --match-test test_regression_outsiderCannotProfitFromRebalance -vv
-forge test            # 148 tests passed across 11 suites
+forge test            # 157 tests passed, 1 skipped, across 14 suites
 ```
 
 `test_regression_outsiderCannotProfitFromRebalance` is the evidence for the `rebalance()` gate. A rebalance sizes and bounds its swaps from pool spot prices, so a caller who moves a pool earlier in the same transaction makes the vault trade against that price and trades back for a profit. With the caller gate removed the test fails with `attacker profit: 52436170143 != 0`: 524 HBAR of profit against a vault of 200,000 HBAR, at a vault loss of 1,170 HBAR. With the gate in place all 16 sandwiches revert with `OnlyOwnerOrSelf`.
 
 The suite was mutation-checked with 18 deliberate changes to the contract, each turning at least one test red, and the contract was restored byte for byte after each: caller gate removed, skip mask ignored, `rearm` guards removed, jitter removed, capacity probe cut back to 16 seconds, factory check removed, trade cap removed on sell and on buy, `deleteSchedule` result dropped, constructor checks removed.
+
+`BasketVaultInvariant.t.sol` checks 6 invariants at 256 runs x 80 depth. `BasketVaultDepositSandwich.t.sol` fuzzes the deposit sandwich and replays a 50-configuration grid whose best attacker result is -219 HBAR on a 200,000 HBAR vault. Those two suites were mutation-checked with 8 further mutations, each turning at least one test red.
 
 ## 8. Price guard refusing a manipulated-looking pool
 
