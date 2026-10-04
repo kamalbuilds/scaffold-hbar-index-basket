@@ -51,6 +51,7 @@
     "node": ">=20.18.3"
   },
   "overrides": {
-    "@coinbase/cdp-sdk": "1.44.1"
+    "@coinbase/cdp-sdk": "1.44.1",
+    "@babel/parser": "7.29.0"
   }
 }
