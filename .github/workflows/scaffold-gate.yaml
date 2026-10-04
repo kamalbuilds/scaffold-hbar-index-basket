@@ -40,5 +40,7 @@ jobs:
       - name: Scaffold, test, lint, build, boot
         env:
           GATE_TEMPLATE: ${{ github.repository }}
+          # Lets the CLI download this repo while it is private; unused once public.
+          GIGET_AUTH: ${{ secrets.GITHUB_TOKEN }}
           PM: ${{ matrix.package-manager }}
         run: bash scripts/gate.sh
