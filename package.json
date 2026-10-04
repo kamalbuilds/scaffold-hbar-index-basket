@@ -52,6 +52,6 @@
   },
   "overrides": {
     "@coinbase/cdp-sdk": "1.44.1",
-    "prettier@^3.5.3": "3.8.1"
+    "prettier": "3.8.1"
   }
 }
