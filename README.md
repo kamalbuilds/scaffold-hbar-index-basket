@@ -10,17 +10,25 @@ The `--` matters with `npm create`: without it npm keeps `--template` for itself
 
 **Live app:** [index-basket-hbar.vercel.app](https://index-basket-hbar.vercel.app) reads the canonical vault on Hedera testnet: NAV, target against actual weights, automation runway and the activity feed. Connect a wallet to deposit or redeem.
 
+![Index Basket fund page on Hedera testnet: net asset value 12.3847 HBAR, share price $0.1058, Chainlink HBAR/USD $0.1020, and the target against actual bar at 40% WHBAR, 30% SAUCE, 30% USDC](docs/images/dashboard.png)
+
+**Contents:** [Five minutes](#see-it-work-in-five-minutes) | [Quickstart](#quickstart) | [How it works](#how-it-works) | [Proven on testnet](#proven-on-hedera-testnet) | [Customize](#customize) | [Deploy to mainnet](#deploy-to-mainnet) | [Testing](#testing) | [Troubleshooting](#troubleshooting) | [Documentation](#documentation)
+
 ## See it work in five minutes
 
-1. Scaffold the template:
+1. Run the app against the live vault, no key needed. Scaffold the template, then install and start it:
 
    ```bash
    npm create scaffold-hbar@latest -- --template kamalbuilds/scaffold-hbar-index-basket
+   cd <your-project>
+   yarn install
+   yarn next:dev
    ```
 
+   Open `localhost:3000`. The fund page reads vault C on Hedera testnet: NAV, target against actual weights, automation runway and the activity feed.
 2. Run the contract tests, no network needed: `yarn foundry:test`.
-3. Put a funded ECDSA testnet key in `packages/foundry/.env` as `DEPLOYER_PRIVATE_KEY`, then run `yarn foundry:live` to deploy a vault and execute every flow on testnet.
-4. Start the app with `yarn next:dev` and open `localhost:3000`.
+3. Deploy your own vault. Put a funded ECDSA testnet key in `packages/foundry/.env` as `DEPLOYER_PRIVATE_KEY`, then run `yarn foundry:live` to deploy a vault and execute every flow on testnet.
+4. Restart `yarn next:dev`. The app now shows the vault you deployed.
 
 **Proof on HashScan:**
 
@@ -359,6 +367,26 @@ Scaffolds this template with `create-scaffold-hbar` into a temporary directory (
 Run `npx hedera-harness doctor`, then `npx hedera-harness validate` for the validators alone or `npx hedera-harness run` to drive a coding agent from `.harness/prd.md`.
 The harness decides the outcome: the Foundry suite, lint and types, a read of the SaucerSwap factory for each pool, a three-leg deposit and redeem suite that must fail if the vault skips a leg, and a scan that the UI names no token.
 On the template as committed `validate` reports `findings=6`; with a reference implementation applied it reports `findings=0`, and ten deliberate bugs each turn a check red. Details in [.harness/README.md](.harness/README.md).
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| Redeem fails, or the UI lists steps before the Redeem button | The receiving account is not associated with WHBAR, SAUCE and USDC (HIP-719). HTS refuses a transfer to an unassociated account | Complete each association step the redeem panel lists, one wallet transaction per token, then redeem. Deposit needs the IBSK association first, listed the same way |
+| Deposit reverts with `StaleOracle` | The Chainlink HBAR/USD answer is older than the vault's `maxOracleAge`. Deposit and rebalance refuse a stale price. Redeem reads no price and still works | Check the feed: `cast call 0x59bC155EB6c6C415fE43255aF66EcF0523c92B4a "latestRoundData()(uint80,int256,uint256,uint256,uint80)" --rpc-url https://testnet.hashio.io/api`. When `updatedAt` is current, retry the deposit |
+| Scheduled runs stop, or the activity feed shows `BookingFailed` or `ScheduledRunFailed` | The vault's native HBAR (fuel) is below the gas reservation of about 3.52 HBAR, so the network refuses the run with `INSUFFICIENT_PAYER_BALANCE` | Send HBAR to the vault: `cast send $VAULT --value 10ether --rpc-url https://testnet.hashio.io/api --private-key $DEPLOYER_PRIVATE_KEY`. Then call `rearm()` from the Debug Contracts page to book the next run |
+| A transaction fails with `INSUFFICIENT_GAS` or runs out of gas | The gas limit is too low. Token creation, swaps and HTS approvals are expensive: `initialize` used 2,319,221 gas and a first deposit 1,137,056 | Use the limits `packages/foundry/script/live-testnet.sh` uses: `--gas-limit 3000000` for `initialize`, `startAutomation` and `redeem`, `--gas-limit 4000000` for `deposit` and `rebalance` |
+| `startAutomation` reverts with `BadInterval` | The interval is outside 60 seconds to 60 days | Pass a value in range, for example `INTERVAL=120 yarn foundry:live`, or `startAutomation(21600)` for six hours |
+| The Deposit and Redeem buttons read "Switch to Hedera Testnet" or "Connect a wallet" | The wallet is on another chain. The app targets Hedera Testnet, chain id 296 | Click "Switch to Hedera Testnet" in the panel, or select that network in your wallet |
+| `cast logs` fails with "exceed the maximum allowed duration of 7 days" | Hashio caps `eth_getLogs` at a 7 day span | Narrow the range: `cast logs --address $VAULT --from-block $((bn - 5000)) --to-block latest --rpc-url https://testnet.hashio.io/api`, with `bn=$(cast block-number --rpc-url https://testnet.hashio.io/api)`. For the full history read the mirror node: `curl -s "https://testnet.mirrornode.hedera.com/api/v1/contracts/$VAULT/results/logs?order=asc&limit=100"` |
+
+## Documentation
+
+- [docs/architecture.md](docs/architecture.md): who can call what, the contract state, and the external calls each flow makes.
+- [docs/hedera-gotchas.md](docs/hedera-gotchas.md): each Hedera behaviour the vault is built around, with the reproduce command and the source.
+- [docs/testnet-evidence.md](docs/testnet-evidence.md): every testnet transaction with the command that re-checks its post-condition.
+- [AGENTS.md](AGENTS.md): the briefing for coding agents: commands, units, invariants and common changes.
+- [.harness/README.md](.harness/README.md): the Hedera Harness recipe for adding a third token leg, and the validators that judge it.
 
 ## License
 
