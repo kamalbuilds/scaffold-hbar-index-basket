@@ -184,7 +184,7 @@ An earlier deployment of the same design. Transaction [0x166dbd...](https://hash
 | Locked as `DEAD_SHARES` | 100,000 |
 | Shares to the depositor | 1,995,783,597 - 100,000 = 1,995,683,597 = 19.95683597 IBSK |
 
-The two bought legs are valued at 1,195,783,597 for the 1,200,000,000 spent: a 0.351% cost, the 0.30% pool fee plus price impact, paid by the depositor in shares (19.9568 for 20 HBAR). The share ledger balances to the unit on chain: the owner (997,841,799), the UI wallet (299,048,386) and the vault's locked shares (100,000) sum to the 1,296,990,185 total supply. Commands for both are in [testnet-evidence.md](testnet-evidence.md#2-deposits).
+The two bought legs are valued at 1,195,783,597 for the 1,200,000,000 spent: a 0.351% cost, the 0.30% pool fee plus price impact, paid by the depositor in shares (19.9568 for 20 HBAR). The share ledger balances to the unit on chain: the owner (997,841,799), the UI wallet (299,048,386) and the vault's locked shares (100,000) sum to the 1,296,990,185 total supply. Commands for both are in [testnet-evidence.md](testnet-evidence.md#2-deposit-and-owner-rebalance).
 
 The matching redeem, [0x4c3313...](https://hashscan.io/testnet/transaction/0x4c33133b1fb8caf8d9e3f8b28a68543f1edef4551dd8bc83b9a51af1e5534328): shares 997,841,798 of supply 1,995,783,597.
 
