@@ -8,6 +8,32 @@ npm create scaffold-hbar@latest -- --template kamalbuilds/scaffold-hbar-index-ba
 
 The `--` matters with `npm create`: without it npm keeps `--template` for itself. `npx create-scaffold-hbar@latest --template kamalbuilds/scaffold-hbar-index-basket` is equivalent.
 
+## See it work in five minutes
+
+1. Scaffold the template:
+
+   ```bash
+   npm create scaffold-hbar@latest -- --template kamalbuilds/scaffold-hbar-index-basket
+   ```
+
+2. Run the contract tests, no network needed: `yarn foundry:test`.
+3. Put a funded ECDSA testnet key in `packages/foundry/.env` as `DEPLOYER_PRIVATE_KEY`, then run `yarn foundry:live` to deploy a vault and execute every flow on testnet.
+4. Start the app with `yarn next:dev` and open `localhost:3000`.
+
+**Proof on HashScan:**
+
+- HTS share token minted on deposit: https://hashscan.io/testnet/transaction/0xe993751cad6ac8774be9387eafa0e7fed1280a3d7790889314f3cb12a70b7b0c
+- Hedera Schedule Service ran a rebalance with no human transaction (sold USDC back to target): https://hashscan.io/testnet/transaction/1791020419.010852853
+- Same, buy side: https://hashscan.io/testnet/transaction/1791020800.024519104
+
+## What you learn from this template
+
+- Minting and burning an HTS token from a contract that is its treasury and supply key.
+- A contract that books its own future calls with the Hedera Schedule Service (HIP-1215) and pays for them.
+- HIP-719 token association from contracts and from the UI.
+- Pricing a basket from SaucerSwap V2 pool state and Chainlink HBAR/USD.
+- Reading contract events from the mirror node instead of `eth_getLogs`.
+
 What a reader gets from the scaffold: one Solidity contract that is the whole protocol, 148 Foundry tests that need no network, a Next.js fund page (live NAV, target against actual weights, deposit, redeem, automation runway), a script that runs every flow on testnet and prints a HashScan link per transaction, and [AGENTS.md](AGENTS.md) for coding agents.
 
 ## Why it needs SaucerSwap, Chainlink, HTS and HSS
