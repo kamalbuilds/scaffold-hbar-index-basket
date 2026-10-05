@@ -459,7 +459,7 @@ Linear's depth is carried by surface ladder + hairline borders. The brand resist
 - Background `{colors.surface-1}`, text `{colors.ink}`, type `{typography.body}`, rounded `{rounded.md}`, padding 8px 12px.
 - Focused state retains the same surface; the focus ring is a 2px `{colors.primary-focus}` outline at 50% opacity.
 
-### Status & Build Page
+### Build Page Component
 
 **`changelog-row`**, Each row in `/build` (changelog page) listing version, date, and changes.
 - Background `{colors.canvas}`, text `{colors.ink}`, type `{typography.body}`, rounded `{rounded.xs}`, padding 24px 0. 1px `{colors.hairline}` bottom rule.
@@ -539,10 +539,3 @@ Linear's depth is carried by surface ladder + hairline borders. The brand resist
 6. Treat lavender as scarce: brand mark, primary CTA, focus, link emphasis.
 7. Lead every section with a product UI screenshot.
 
-## Known Gaps
-
-- The four-step surface ladder values are extracted directly from Linear's `--color-bg-level-3`, `--color-line-tint`, etc. CSS variables; they are Linear's canonical surface spec.
-- Form-field error and validation styling is not visible on the inspected pages.
-- Light mode is not documented because the marketing site does not ship a light theme.
-- Linear's actual product UI uses a richer color-tag palette (red, orange, yellow, green, blue, purple) for issue priorities and project labels, those colors live in the in-product surfaces shown in mockups.
-- The custom display, text, and mono families are proprietary; an open-source substitute is acceptable.
