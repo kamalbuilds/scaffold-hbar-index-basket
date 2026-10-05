@@ -50,20 +50,20 @@ const cumulative = (values: number[]) => values.map((_, i) => values.slice(0, i)
 function Bar({ label, values, rows, hollow }: { label: string; values: number[]; rows: Row[]; hollow?: string }) {
   const summary = rows.map((r, i) => `${r.symbol} ${values[i].toFixed(1)}%`).join(", ");
   return (
-    <div className="grid grid-cols-[4.5rem_1fr] items-center gap-4">
-      <span className="text-xs font-medium text-base-content/70">{label}</span>
+    <div className="grid grid-cols-[3.5rem_1fr] items-center gap-3 sm:grid-cols-[4.5rem_1fr] sm:gap-4">
+      <span className="text-[13px] font-medium text-base-content/70">{label}</span>
       {hollow ? (
-        <div className="flex h-10 items-center rounded-md border border-dashed border-base-content/30 px-3 text-sm text-base-content/70">
+        <div className="flex h-14 items-center rounded-lg border border-dashed border-base-content/30 px-3 text-sm text-base-content/70">
           {hollow}
         </div>
       ) : (
-        <div className="flex h-10 gap-px overflow-hidden rounded-md" role="img" aria-label={`${label}: ${summary}`}>
+        <div className="flex h-14 gap-0.5 overflow-hidden rounded-lg" role="img" aria-label={`${label}: ${summary}`}>
           {rows.map((r, i) => (
             <div
               key={r.token}
               title={`${r.symbol} ${values[i].toFixed(2)}%`}
-              className="flex min-w-0 items-center overflow-hidden px-2 text-xs font-medium"
-              style={{ width: `${values[i]}%`, background: segColor(r.index), color: "var(--seg-ink)" }}
+              className="flex min-w-0 items-center overflow-hidden px-3 text-xs font-medium tabular-nums"
+              style={{ width: `${values[i]}%`, background: segColor(r.index), color: `var(--seg-ink-${r.index % 5})` }}
             >
               {values[i] >= 12 && (
                 <span className="truncate">
@@ -83,15 +83,15 @@ function Ribbons({ rows, target, actual }: { rows: Row[]; target: number[]; actu
   const t0 = cumulative(target);
   const a0 = cumulative(actual);
   return (
-    <div className="grid grid-cols-[4.5rem_1fr] gap-4" aria-hidden>
+    <div className="grid grid-cols-[3.5rem_1fr] gap-3 sm:grid-cols-[4.5rem_1fr] sm:gap-4" aria-hidden>
       <span />
-      <svg viewBox="0 0 100 10" preserveAspectRatio="none" className="block h-12 w-full">
+      <svg viewBox="0 0 100 10" preserveAspectRatio="none" className="block h-16 w-full">
         {rows.map((r, i) => (
           <g key={r.token}>
             <polygon
               points={`${t0[i]},0 ${t0[i] + target[i]},0 ${a0[i] + actual[i]},10 ${a0[i]},10`}
               fill={segColor(r.index)}
-              fillOpacity={r.outside ? 0.42 : 0.22}
+              fillOpacity={r.outside ? 0.6 : 0.36}
             />
             <line
               x1={t0[i]}
@@ -140,12 +140,20 @@ export function Composition({ snap }: { snap: Snapshot }) {
   const bandText = `${fmtPercentFromBps(cfg.driftBps)} of NAV`;
 
   return (
-    <section aria-labelledby="composition-title" className="rounded-box border border-base-300 bg-base-100 p-6 lg:p-8">
+    <section aria-labelledby="composition-title" className="panel panel-xl p-5 sm:p-6 lg:p-8">
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
         <div>
-          <h2 id="composition-title" className="m-0 text-xl font-semibold">
-            Target against actual
-          </h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 id="composition-title" className="m-0 text-[22px] font-medium tracking-[-0.02em]">
+              Target against actual
+            </h2>
+            {!empty && worst && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-base-300 bg-base-300/50 px-2 py-0.5 text-xs text-base-content/80">
+                <span className={`h-1.5 w-1.5 rounded-full ${worst.outside ? "bg-error" : "bg-success"}`} aria-hidden />
+                {worst.outside ? "Outside band" : "In band"}
+              </span>
+            )}
+          </div>
           <p className="m-0 mt-1 max-w-xl text-sm text-base-content/70">
             The vault trades a token back to target once it sits more than {bandText} away from its weight.
           </p>
@@ -176,9 +184,9 @@ export function Composition({ snap }: { snap: Snapshot }) {
       </div>
 
       <div className="mt-8">
-        <table className="table table-sm w-full max-lg:block">
+        <table className="table w-full max-lg:block">
           <thead className="hidden lg:table-header-group">
-            <tr className="text-xs text-base-content/70">
+            <tr className="border-b border-base-300 text-[13px] text-base-content/70 [&>th]:px-3 [&>th]:py-2">
               <th className="font-medium">Token</th>
               <th className="text-right font-medium">Balance</th>
               <th className="text-right font-medium">Value (WHBAR)</th>

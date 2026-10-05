@@ -14,9 +14,9 @@ const Stat = ({
   sub: React.ReactNode;
   tone?: "error";
 }) => (
-  <div className="bg-base-100 p-5">
-    <dt className="text-xs font-medium text-base-content/70">{label}</dt>
-    <dd className="m-0 mt-2 font-mono text-2xl tabular-nums leading-none">{value}</dd>
+  <div className="min-w-0 bg-base-100 p-4 sm:p-5">
+    <dt className="text-[13px] font-medium tracking-[0.01em] text-base-content/70">{label}</dt>
+    <dd className="m-0 mt-3 break-words text-[22px] font-semibold leading-none tracking-[-0.03em] tabular-nums lg:text-[28px]">{value}</dd>
     <dd className={`m-0 mt-2 text-xs ${tone === "error" ? "text-error" : "text-base-content/70"}`}>{sub}</dd>
   </div>
 );
@@ -30,7 +30,7 @@ export function StatStrip({ snap }: { snap: Snapshot }) {
   const stale = lv.hbarUsd === undefined;
 
   return (
-    <dl className="m-0 grid grid-cols-2 gap-px overflow-hidden rounded-box border border-base-300 bg-base-300 lg:grid-cols-4">
+    <dl className="m-0 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-base-300 bg-base-300 lg:grid-cols-4">
       <Stat
         label="Net asset value"
         value={`${fmtUnits(lv.nav, WHBAR_DECIMALS, 4)} HBAR`}

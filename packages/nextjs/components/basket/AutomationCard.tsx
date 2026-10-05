@@ -80,10 +80,10 @@ export function AutomationCard({ snap }: { snap: Snapshot }) {
 
   return (
     <section
-      className="flex flex-col rounded-box border border-base-300 bg-base-100 p-6"
+      className="flex flex-col panel p-6"
       aria-labelledby="automation-title"
     >
-      <h2 id="automation-title" className="m-0 text-xl font-semibold">
+      <h2 id="automation-title" className="m-0 text-[22px] font-medium tracking-[-0.02em]">
         Automation
       </h2>
       <p className="m-0 mt-1 text-sm text-base-content/70">

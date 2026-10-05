@@ -142,9 +142,9 @@ export function ActivityFeed({ snap }: { snap: Snapshot }) {
   const rows = expanded ? events.data : events.data?.slice(0, COLLAPSED_ROWS);
 
   return (
-    <section className="rounded-box border border-base-300 bg-base-100 p-6 lg:p-8" aria-labelledby="activity-title">
+    <section className="panel p-6 lg:p-8" aria-labelledby="activity-title">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 id="activity-title" className="m-0 text-xl font-semibold">
+        <h2 id="activity-title" className="m-0 text-[22px] font-medium tracking-[-0.02em]">
           Activity
         </h2>
         <span className="text-xs text-base-content/70">Decoded from the Hedera mirror node, refreshed every 15s</span>

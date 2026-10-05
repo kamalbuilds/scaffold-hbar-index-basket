@@ -13,8 +13,8 @@ const joinNames = (names: string[]) =>
   names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 
 const Notice = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <div className="rounded-box border border-base-300 bg-base-100 p-8">
-    <h2 className="m-0 text-xl font-semibold">{title}</h2>
+  <div className="panel panel-xl p-8">
+    <h2 className="m-0 text-[22px] font-medium tracking-[-0.02em]">{title}</h2>
     <div className="mt-2 max-w-xl text-sm text-base-content/70">{children}</div>
   </div>
 );
@@ -25,12 +25,12 @@ export function FundView() {
   const symbols = config.data ? config.data.tokens.map(t => t.symbol) : [];
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10 lg:px-8 lg:py-14">
-      <header>
-        <h1 className="m-0 max-w-2xl text-3xl font-semibold tracking-tight md:text-5xl">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-5 pb-20 pt-10 sm:px-6 lg:gap-8 lg:px-8 lg:pb-24 lg:pt-14">
+      <header className="grid items-end gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-16">
+        <h1 className="m-0 text-4xl font-semibold leading-[1.08] tracking-[-0.035em] md:text-6xl md:tracking-[-0.04em]">
           One share, a slice of every token in the basket.
         </h1>
-        <p className="mt-4 max-w-xl text-base text-base-content/70">
+        <p className="m-0 max-w-md text-base leading-relaxed text-base-content/70 lg:pb-1">
           Deposit HBAR and the vault buys {symbols.length ? joinNames(symbols) : "the basket"} on SaucerSwap at their
           target weights. A Hedera schedule rebalances it. Redeem and take your slice in kind.
           {vault.deployed && (
@@ -73,8 +73,8 @@ export function FundView() {
 
       {vault.deployed && !(config.isError || live.isError) && (!config.data || !live.data) && (
         <div className="flex flex-col gap-8" aria-busy="true" aria-label="Reading the vault">
-          <div className="h-28 animate-pulse rounded-box bg-base-300/50" />
-          <div className="h-80 animate-pulse rounded-box bg-base-300/50" />
+          <div className="panel h-28 animate-pulse" />
+          <div className="panel panel-xl h-80 animate-pulse" />
         </div>
       )}
 
@@ -88,11 +88,15 @@ function Loaded({ snap }: { snap: Parameters<typeof StatStrip>[0]["snap"] }) {
     <>
       <StatStrip snap={snap} />
       <Composition snap={snap} />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <TradePanel snap={snap} />
-        <AutomationCard snap={snap} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_26rem] lg:items-start lg:gap-8">
+        <div className="lg:sticky lg:top-20 lg:order-2">
+          <TradePanel snap={snap} />
+        </div>
+        <div className="flex min-w-0 flex-col gap-6 lg:gap-8">
+          <AutomationCard snap={snap} />
+          <ActivityFeed snap={snap} />
+        </div>
       </div>
-      <ActivityFeed snap={snap} />
     </>
   );
 }
