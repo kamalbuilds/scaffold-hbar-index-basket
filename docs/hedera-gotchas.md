@@ -1,5 +1,7 @@
 # Hedera behaviours the vault is built around
 
+`BasketVault` depends on 16 behaviours of the Hedera network that an Ethereum developer does not expect. Each entry gives what happens, where the contract handles it, and a command that reproduces it against live testnet.
+
 Setup for the commands:
 
 ```bash
@@ -48,6 +50,8 @@ curl -s $M/accounts/$VID | jq .balance.balance        # the same fuel in tinybar
 cast gas-price --rpc-url $RPC                         # 880000000000 weibar = 88 tinybar per gas
 ```
 
+**Source.** Measured on Hedera testnet; the command above reproduces it.
+
 ## HTS association before receipt (HIP-719)
 
 **What happens.** An account receives an HTS token only if it is associated with it, unless it has free automatic association slots. [HIP-719](https://github.com/hiero-ledger/hiero-improvement-proposals/blob/main/HIP/hip-719.md) exposes `associate()` on the token's own EVM address, which returns a response code (22 for success, 194 when already associated) instead of reverting. Association itself costs gas: the owner's association of the share token measured 726,488 gas.
@@ -67,6 +71,8 @@ curl -s $M/accounts/0.0.10838073/tokens | jq -c '.tokens[]|{token_id,automatic_a
 ```
 
 The unit tests that pin the contract side: `test_initialize_associatesEveryTokenAndCreatesShareToken`, `test_initialize_toleratesTokensAlreadyAssociated`, `test_initialize_revertsWhenAssociationFails`, `test_deposit_revertsWhenDepositorIsNotAssociatedWithTheShareToken`, `test_redeem_revertsWhenRedeemerIsNotAssociatedWithAPayoutToken`.
+
+**Source.** Measured on Hedera testnet; the command above reproduces it.
 
 ## HTS approvals cost about 700k gas and stop at max supply
 
@@ -106,6 +112,8 @@ done
 
 Unit tests: `test_deposit_onlyApprovesWhenAllowanceIsShort`, `test_rebalance_approvesTheSoldLegOnceForItsSupply`.
 
+**Source.** Measured on Hedera testnet; the command above reproduces it.
+
 ## A scheduled call arrives with msg.sender equal to the booking contract
 
 **What happens.** The network executes a schedule created by a contract as a call from that contract. The callee sees `msg.sender == address(this)` when it booked itself.
@@ -122,6 +130,8 @@ curl -s "$M/contracts/$VID/results/logs?topic0=$T&timestamp=gte:1791006000&times
 ```
 
 Five `ScheduledRun` events exist (1791020053 to 1791020800, more once the 6 hour cadence has run) because five network executions passed the `OnlySelf` check. Unit test: `test_runScheduled_revertsForEveryoneButTheVault`.
+
+**Source.** Measured on Hedera testnet; the command above reproduces it.
 
 ## 3,000,000 gas is the floor for a self-rescheduling call
 
@@ -144,6 +154,8 @@ done
 
 Unit test: `test_constructor_rejectsScheduledGasBelowThreeMillion`.
 
+**Source.** Measured on Hedera testnet; the command above reproduces it.
+
 ## One schedule per scheduled execution
 
 **What happens.** A scheduled execution may book exactly one schedule. A second `scheduleCall` in the same execution fails with `NO_SCHEDULING_ALLOWED_AFTER_SCHEDULED_RECURSION` and fails the whole transaction.
@@ -160,6 +172,8 @@ curl -s "$M/transactions?timestamp=gte:1791020419.010852853&timestamp=lt:1791020
 ```
 
 Unit tests: `test_scheduledRun_booksTheSuccessorBeforeItRebalances` asserts one `RunBooked` per execution; `test_scheduledRun_chainsAcrossSeveralRuns` asserts the Schedule Service sees one new call per run.
+
+**Source.** Measured on Hedera testnet; the command above reproduces it.
 
 ## Expiry is refused beyond 62 days
 
@@ -185,6 +199,8 @@ cast call $HSS "hasScheduleCapacity(uint256,uint256)(bool)" $((NOW - 10)) 400000
 
 Unit tests: `test_start_rejectsIntervalsAboveSixtyDays`, `test_start_rejectsIntervalsBelowTheMinimum`.
 
+**Source.** Measured on Hedera testnet; the command above reproduces it.
+
 ## A busy second refuses new schedules
 
 **What happens.** Each consensus second holds a bounded amount of scheduled gas. A booking for a full second fails with `SCHEDULE_EXPIRY_IS_BUSY`. [HIP-1215](https://github.com/hiero-ledger/hiero-improvement-proposals/blob/main/HIP/hip-1215.md) adds `hasScheduleCapacity(expirySecond, gasLimit)` so a contract can ask first.
@@ -202,7 +218,7 @@ cast call $HSS "hasScheduleCapacity(uint256,uint256)(bool)" $((NOW + INT)) $GAS 
 
 Unit tests with a mock Schedule Service that marks seconds busy: `test_capacity_usesTheIdealSecondWhenFree`, `test_capacity_picksIdealPlusDelayWhenIdealIsBusy`, `test_capacity_backsOffExponentially`, `test_capacity_reachesTheLongestProbe`, `test_capacity_failsWithBusyCodeWhenEverySlotIsTaken`.
 
-**Source.** HIP-1215.
+**Source.** Measured on Hedera testnet; the command above reproduces it.
 
 ## The payer needs the full gas reservation, not the gas a run burns
 
@@ -236,13 +252,15 @@ curl -s "$M/transactions?account.id=$VID&timestamp=gte:1791020000&timestamp=lte:
 # 1.3055 HBAR (no trade, three runs), 1.9920 HBAR (sell, includes the one-time USDC approval), 1.3964 HBAR (buy)
 ```
 
-A 4 HBAR vault dying with 2.76 HBAR inside it is A testnet measurement of the same rule, still readable:
+A 4 HBAR vault dying with 2.76 HBAR inside it is the same rule, still readable on testnet:
 
 ```bash
 curl -s "$M/transactions?account.id=0.0.10684549&limit=2&order=desc" | jq -r '.transactions[]|"\(.result) charged=\(.charged_tx_fee)"'
 # INSUFFICIENT_PAYER_BALANCE charged=2306440
 # SUCCESS charged=162987482
 ```
+
+**Source.** Measured on Hedera testnet; the command above reproduces it.
 
 ## Scheduled calls read a clock about two seconds early
 
@@ -260,6 +278,8 @@ curl -s "$M/contracts/$VID/results/logs?topic0=$T&order=asc&timestamp=gte:179100
 
 The five executions land at 1791020053, 1791020236, 1791020419, 1791020611 and 1791020800: gaps of 183, 183, 192 and 189 seconds. Earlier deployments without the offset re-booked every `interval - 2` seconds (178 to 179 on a 180 second interval, 118 on a 120 second interval), which is the clock lag alone; their records are in [testnet-evidence.md](testnet-evidence.md#earlier-deployments-vault-b-and-vault-a).
 
+**Source.** Measured on Hedera testnet; the command above reproduces it.
+
 ## A balance read inside a scheduled run is short by the unreturned allowance
 
 **What happens.** During a scheduled call the account has already been debited the whole gas allowance; the refund of unused gas lands when the call returns. A contract that reads its own balance mid-run sees it short by the unreturned part. A testnet run recorded 0.73 HBAR seen against 2.2245 HBAR after settlement on a vault funded with 4 HBAR.
@@ -271,6 +291,8 @@ The five executions land at 1791020053, 1791020236, 1791020419, 1791020611 and 1
 ```bash
 grep -n "address(this).balance" packages/foundry/contracts/BasketVault.sol     # no matches
 ```
+
+**Source.** Measured on Hedera testnet; the command above reproduces it.
 
 ## Testnet pools are not arbitraged
 
